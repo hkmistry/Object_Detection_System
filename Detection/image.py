@@ -28,7 +28,10 @@ def detect_image(file, query=None, threshold=0.25, raw=False):
     img = cv2.imread(filepath)
     if img is None:
         return None, None, []
-    results = model(img, verbose=False)
+    
+    import torch
+    with torch.no_grad():
+        results = model(img, verbose=False)
 
     if raw:
         # Return original image and all detections with boxes

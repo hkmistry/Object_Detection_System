@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, Response
 from ultralytics import YOLO
-import cv2, os, base64, threading, time
+import cv2, os, base64, threading, time, torch
 
 video_bp = Blueprint('video', __name__)
 model = YOLO("yolov8n.pt")
@@ -179,7 +179,8 @@ class VideoDetectionSession:
                 if not ret:
                     # Analyze and preserve the final frame if the loop skipped past it
                     if last_frame is not None and (frame_count % frame_skip != 0):
-                        results = model(last_frame, verbose=False)
+                        with torch.no_grad():
+                            results = model(last_frame, verbose=False)
                         filtered_res = self._filter_results(results)
                         annotated_frame = self._annotate_frame(last_frame, filtered_res)
 
@@ -222,7 +223,8 @@ class VideoDetectionSession:
                 last_frame = frame.copy()
 
                 if frame_count % frame_skip == 0 or frame_skip == 1:
-                    results = model(frame, verbose=False)
+                    with torch.no_grad():
+                        results = model(frame, verbose=False)
                     filtered_res = self._filter_results(results)
                     annotated_frame = self._annotate_frame(frame, filtered_res)
 

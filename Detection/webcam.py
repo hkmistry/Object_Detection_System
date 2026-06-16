@@ -1,6 +1,7 @@
 import cv2
 import threading
 import time
+import torch
 from ultralytics import YOLO
 
 # Load YOLOv8 model
@@ -49,7 +50,8 @@ def _capture_loop():
             if not ret:
                 continue
 
-            results = model(frame, verbose=False)
+            with torch.no_grad():
+                results = model(frame, verbose=False)
 
             # Parse tags/queries
             if search_query:
