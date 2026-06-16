@@ -4,8 +4,8 @@ import time
 import torch
 from ultralytics import YOLO
 
-# Load YOLOv8 model
-model = YOLO("yolov8n.pt")
+# Load YOLO model from shared base
+from Detection.model_base import shared_model as model
 
 # Global state
 camera = None

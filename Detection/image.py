@@ -5,8 +5,8 @@ from flask import request
 from werkzeug.utils import secure_filename
 import os
 
-# Load YOLO model
-model = YOLO("yolov8n.pt")
+# Load YOLO model from shared base
+from Detection.model_base import shared_model as model
 
 # Folder to temporarily store uploads
 UPLOAD_FOLDER = "uploads"

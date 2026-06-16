@@ -3,7 +3,8 @@ from ultralytics import YOLO
 import cv2, os, base64, threading, time, torch
 
 video_bp = Blueprint('video', __name__)
-model = YOLO("yolov8n.pt")
+# Load YOLO model from shared base
+from Detection.model_base import shared_model as model
 
 class VideoDetectionSession:
     def __init__(self):
