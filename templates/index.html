@@ -1,0 +1,3271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Detection System - AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    spacing: {
+                        '42': '10.5rem', /* 168px */
+                    },
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        'background-dark': '#121214', /* Warm Charcoal Background */
+                        'card-dark': '#1c1c1e',       /* Warm Charcoal Card Background */
+                        'accent-blue': '#3b82f6',     /* Royal Blue Accent */
+                        'text-light': '#e0e0f0',      /* Light Text Color */
+                        'text-muted': '#a0a0c0',      /* Muted Text Color */
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Hide scrollbars to keep a clean, single-page UI */
+        html, body {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        ::-webkit-scrollbar {
+            display: none;  /* Chrome, Safari and Opera */
+        }
+        /* Custom image placeholders to simulate the screenshots */
+        .placeholder-img {
+            background-color: #3f3f6e;
+            background-size: cover;
+            background-position: center;
+        }
+        .webcam-standby {
+            background-image: url('https://picsum.photos/800/450?city');
+            filter: brightness(60%);
+        }
+        .image-preview {
+             background-image: url('https://picsum.photos/800/450?desk');
+        }
+        .video-player {
+             background-image: url('https://picsum.photos/700/400?hands');
+        }
+        /* Hide all pages initially except the active one */
+        .page-content:not(.active) {
+            display: none;
+        }
+        #image-preview {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* fits image inside preview box */
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+        }
+        #image-preview.loaded {
+            opacity: 1;
+        }
+
+        /* Smooth transition for post-session summary card */
+        #webcam-summary-card {
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            margin-top: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            border-width: 0;
+        }
+        #webcam-summary-card.show {
+            opacity: 1;
+            max-height: 1000px;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-width: 1px;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Outfit', sans-serif;
+        }
+    </style>
+    <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body class="bg-background-dark text-text-light min-h-screen font-sans">
+
+    <header class="sticky top-0 bg-card-dark bg-opacity-95 backdrop-blur-sm shadow-lg z-50">
+        <nav class="max-w-[1380px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+            <div class="flex items-center">
+                <svg data-feather="aperture" class="w-6 h-6 text-accent-blue mr-2"></svg>
+                <span class="text-xl font-bold">Object Detection System</span>
+            </div>
+            <div class="hidden sm:ml-6 sm:flex sm:space-x-4">
+                <a href="#" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:text-accent-blue transition-colors duration-200" data-page="home">Home</a>
+                <a href="#" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:text-accent-blue transition-colors duration-200" data-page="webcam">Web-Cam Detection</a>
+                <a href="#" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:text-accent-blue transition-colors duration-200" data-page="image">Image Detection</a>
+                <a href="#" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:text-accent-blue transition-colors duration-200" data-page="video">Video Detection</a>
+                <a href="#" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:text-accent-blue transition-colors duration-200" data-page="search">Object Search</a>
+            </div>
+            <!-- <div class="relative hidden lg:block">
+                <input type="text" placeholder="Search for objects..." class="bg-background-dark/50 border border-text-muted/30 text-sm rounded-full py-1 pl-10 pr-4 focus:outline-none focus:ring-1 focus:ring-accent-blue w-48 transition duration-150">
+                <svg data-feather="search" class="w-4 h-4 text-text-muted absolute left-3 top-1/2 transform -translate-y-1/2"></svg>
+            </div> -->
+        </nav>
+    </header>
+
+    <main class="max-w-[1380px] mx-auto px-4 py-4 sm:px-6 sm:py-8 lg:px-8 lg:py-10 min-h-[calc(100vh-160px)]">
+
+        <!-- Global Workstation Alert Banner -->
+        <div id="global-alert-banner" class="hidden mb-6 bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-[6px] flex items-center justify-between transition-all duration-300">
+            <div class="flex items-center space-x-2.5">
+                <svg data-feather="alert-circle" class="w-5 h-5 text-red-400 flex-shrink-0"></svg>
+                <span id="global-alert-message" class="text-sm font-medium"></span>
+            </div>
+            <button type="button" id="global-alert-dismiss" class="text-red-400 hover:text-red-300 transition focus:outline-none text-lg leading-none">×</button>
+        </div>
+
+        <section id="home-page" class="page-content active pb-12">
+            <div class="text-center pt-1 pb-3">
+                <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-text-light">Uncover the World with <span class="text-accent-blue">Object Detection</span></h1>
+                <p class="mt-2 text-base sm:text-lg text-text-muted max-w-2xl mx-auto">Our advanced AI system helps you identify and analyze objects in real-time through webcams, images, or videos. Explore our powerful detection modes.</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+                <div class="group bg-card-dark rounded-[10px] border border-white/[0.06] hover:border-white/15 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 overflow-hidden p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="w-full h-44 rounded-[6px] overflow-hidden flex items-center justify-center">
+                            <img src="/uploads/webcam_icon.png" class="w-full h-full object-cover" alt="Webcam Icon">
+                        </div>
+                        <div class="mt-5">
+                            <h2 class="text-xl font-semibold text-text-light group-hover:text-accent-blue transition-colors duration-200">Web-Cam Detection</h2>
+                            <p class="text-text-muted text-sm mt-3 leading-relaxed">Experience live object detection using your webcam, ideal for real-time monitoring and interactive analysis.</p>
+                        </div>
+                    </div>
+                    <div class="pt-6">
+                        <button class="nav-link w-full py-2 bg-accent-blue text-background-dark rounded-[6px] font-bold hover:scale-[1.02] hover:opacity-95 transform transition-all duration-300 text-sm" data-page="webcam">Explore</button>
+                    </div>
+                </div>
+
+                <div class="group bg-card-dark rounded-[10px] border border-white/[0.06] hover:border-white/15 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 overflow-hidden p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="w-full h-44 rounded-[6px] overflow-hidden flex items-center justify-center">
+                            <img src="/uploads/image_icon.png" class="w-full h-full object-cover" alt="Image Icon">
+                        </div>
+                        <div class="mt-5">
+                            <h2 class="text-xl font-semibold text-text-light group-hover:text-accent-blue transition-colors duration-200">Image Detection</h2>
+                            <p class="text-text-muted text-sm mt-3 leading-relaxed">Upload any image and let our system identify objects within it. Perfect for analyzing existing photos.</p>
+                        </div>
+                    </div>
+                    <div class="pt-6">
+                        <button class="nav-link w-full py-2 bg-accent-blue text-background-dark rounded-[6px] font-bold hover:scale-[1.02] hover:opacity-95 transform transition-all duration-300 text-sm" data-page="image">Explore</button>
+                    </div>
+                </div>
+
+                <div class="group bg-card-dark rounded-[10px] border border-white/[0.06] hover:border-white/15 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 overflow-hidden p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="w-full h-44 rounded-[6px] overflow-hidden flex items-center justify-center">
+                            <img src="/uploads/video_icon.png" class="w-full h-full object-cover" alt="Video Icon">
+                        </div>
+                        <div class="mt-5">
+                            <h2 class="text-xl font-semibold text-text-light group-hover:text-accent-blue transition-colors duration-200">Video Detection</h2>
+                            <p class="text-text-muted text-sm mt-3 leading-relaxed">Process video files to detect and track objects over time, providing comprehensive insights into moving scenes.</p>
+                        </div>
+                    </div>
+                    <div class="pt-6">
+                        <button class="nav-link w-full py-2 bg-accent-blue text-background-dark rounded-[6px] font-bold hover:scale-[1.02] hover:opacity-95 transform transition-all duration-300 text-sm" data-page="video">Explore</button>
+                    </div>
+                </div>
+
+                <div class="group bg-card-dark rounded-[10px] border border-white/[0.06] hover:border-white/15 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 overflow-hidden p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="w-full h-44 rounded-[6px] overflow-hidden flex items-center justify-center">
+                            <img src="/uploads/voice_icon.png" class="w-full h-full object-cover" alt="Voice Search Icon">
+                        </div>
+                        <div class="mt-5">
+                            <h2 class="text-xl font-semibold text-text-light group-hover:text-accent-blue transition-colors duration-200">Object Search & Voice Assistant</h2>
+                            <p class="text-text-muted text-sm mt-3 leading-relaxed">Find specific objects using text input or our integrated voice assistant for quick and convenient searches.</p>
+                        </div>
+                    </div>
+                    <div class="pt-6">
+                        <button class="nav-link w-full py-2 bg-accent-blue text-background-dark rounded-[6px] font-bold hover:scale-[1.02] hover:opacity-95 transform transition-all duration-300 text-sm" data-page="search">Explore</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="webcam-page" class="page-content">
+            <h1 class="text-3xl font-bold mb-2">Web-Cam Detection</h1>
+            <p class="text-text-muted mb-5">Activate your webcam to detect objects live and in real-time.</p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Video Frame (larger) -->
+                <div class="lg:col-span-2 bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl flex flex-col items-center">
+                    <div id="video-frame" class="w-full aspect-video rounded-[6px] overflow-hidden bg-black flex items-center justify-center relative">
+                        <img src="/uploads/webcam_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-20" alt="Webcam Standby Background">
+                        <div class="relative text-center text-text-light z-10 p-6">
+                            <svg data-feather="video" class="w-10 h-10 mx-auto mb-3 text-accent-blue"></svg>
+                            <h3 class="text-lg font-semibold text-text-light">Webcam Ready</h3>
+                            <p class="text-sm text-text-muted mt-1">System ready. Click "Start Detection" to begin real-time analysis.</p>
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-4 mt-6">
+                        <button id="start-btn" class="flex items-center justify-center w-44 py-2.5 bg-accent-blue text-background-dark rounded-[6px] text-sm font-semibold hover:bg-accent-blue/90 transform hover:scale-[1.01] transition-all duration-200 shadow-md">
+                            <svg data-feather="play" class="w-4 h-4 mr-2"></svg>
+                            Start Detection
+                        </button>
+                        <button id="stop-btn" class="flex items-center justify-center w-44 py-2.5 bg-white/5 text-text-muted border border-white/[0.06] rounded-[6px] text-sm font-semibold hover:bg-white/10 hover:text-text-light transform hover:scale-[1.01] transition-all duration-200 shadow-md">
+                            <svg data-feather="square" class="w-4 h-4 mr-2"></svg>
+                            Stop Detection
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Detection Panel (smaller, bigger font) -->
+                <div class="bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl flex flex-col">
+                    <div class="flex items-center justify-between mb-4 border-b border-text-muted/10 pb-3">
+                        <h2 class="text-xl font-semibold">Detected Objects</h2>
+                        <span id="webcam-status-badge" class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-white/5 text-text-muted rounded-[4px] border border-white/[0.06]">
+                            <span class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>
+                            Idle
+                        </span>
+                    </div>
+                    <div id="detection-panel" class="text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted">
+                        <svg data-feather="activity" class="w-8 h-8 mb-2 text-text-muted/40"></svg>
+                        <p class="font-semibold text-text-light">Waiting for detection...</p>
+                        <p class="text-sm text-text-muted max-w-[240px] mt-1">Detected objects and confidence scores will appear here once analysis begins.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Post-Session Detection Summary Card -->
+            <div id="webcam-summary-card" class="bg-card-dark rounded-[10px] border border-white/[0.06] shadow-xl p-6">
+                <div class="flex items-center justify-between border-b border-text-muted/10 pb-4 mb-5">
+                    <div class="flex items-center space-x-2">
+                        <svg data-feather="clipboard" class="w-5 h-5 text-accent-blue"></svg>
+                        <h2 class="text-xl font-semibold text-text-light">Session Detection Summary</h2>
+                    </div>
+                    <span class="text-xs font-semibold px-2.5 py-0.5 rounded-[4px] bg-white/5 text-text-muted border border-white/[0.06]">Post-Session</span>
+                </div>
+
+                <!-- Empty State -->
+                <div id="summary-empty-state" class="text-center py-8 text-text-muted hidden">
+                    <svg data-feather="slash" class="w-10 h-10 mx-auto mb-3 text-text-muted/30"></svg>
+                    <p class="font-semibold text-text-light text-lg">No objects were detected during this session.</p>
+                    <p class="text-sm text-text-muted mt-1">Make sure objects are clearly visible in the camera frame.</p>
+                </div>
+
+                <!-- Content State -->
+                <div id="summary-content-state" class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <!-- Session Duration -->
+                    <div class="bg-background-dark/40 p-4 rounded-[6px] border border-white/[0.04] flex flex-col justify-between">
+                        <div>
+                            <p class="text-xs text-text-muted uppercase tracking-wider font-semibold">Session Duration</p>
+                            <p id="summary-duration" class="text-2xl font-bold text-text-light mt-1.5">-</p>
+                        </div>
+                        <p class="text-[11px] text-text-muted mt-2">Active runtime of webcam analysis</p>
+                    </div>
+                    
+                    <!-- Unique Objects -->
+                    <div class="bg-background-dark/40 p-4 rounded-[6px] border border-white/[0.04] flex flex-col justify-between">
+                        <div>
+                            <p class="text-xs text-text-muted uppercase tracking-wider font-semibold">Unique Objects</p>
+                            <p id="summary-unique-objects" class="text-2xl font-bold text-text-light mt-1.5">-</p>
+                        </div>
+                        <p class="text-[11px] text-text-muted mt-2">Number of distinct item classes seen</p>
+                    </div>
+
+                    <!-- Most Detected Object -->
+                    <div class="bg-background-dark/40 p-4 rounded-[6px] border border-white/[0.04] flex flex-col justify-between">
+                        <div>
+                            <p class="text-xs text-text-muted uppercase tracking-wider font-semibold">Most Detected Object</p>
+                            <p id="summary-top-object" class="text-2xl font-bold text-accent-blue mt-1.5">-</p>
+                        </div>
+                        <p class="text-[11px] text-text-muted mt-2">Class with the highest capture frequency</p>
+                    </div>
+
+                    <!-- Compact tags/chips of detected objects -->
+                    <div class="md:col-span-3 bg-background-dark/20 p-5 rounded-[6px] border border-white/[0.04] mt-2">
+                        <h3 class="text-sm font-semibold text-text-light mb-3">Objects Found During Session</h3>
+                        <div id="summary-objects-list" class="flex flex-wrap gap-2.5">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <section id="image-page" class="page-content">
+            <h1 class="text-3xl font-bold mb-4">Upload Image for Detection</h1>
+            <p class="text-text-muted mb-6">Drag and drop an image or click to select a file. Detect objects instantly.</p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Image Upload & Preview -->
+                <div class="lg:col-span-2 bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl relative">
+                    <label for="image-upload-input" class="w-full h-full cursor-pointer">
+                        <div id="image-upload-area" class="w-full aspect-video rounded-[6px] overflow-hidden bg-black flex items-center justify-center hover:border-accent-blue/50 border-2 border-dashed border-text-muted/30 transition relative">
+                            <img id="image-preview" class="w-full h-full object-contain" src="" alt="Preview">
+                            <div id="upload-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-center text-text-muted">
+                                <img src="/uploads/image_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-10" alt="Upload Background">
+                                <div class="relative z-10 flex flex-col items-center">
+                                    <svg data-feather="upload-cloud" class="w-12 h-12 mb-2 text-accent-blue"></svg>
+                                    <p class="font-semibold text-text-light">Click or Drop Image Here</p>
+                                    <p class="text-xs text-text-muted mt-1">Supports JPG, PNG, WEBP</p>
+                                </div>
+                            </div>
+                        </div>
+                    </label>
+                    <input type="file" id="image-upload-input" class="hidden" accept="image/*">
+
+                    <div class="mt-4 flex justify-center">
+                        <button id="detect-image-btn" class="flex items-center justify-center w-52 py-2.5 bg-accent-blue text-background-dark rounded-[6px] text-sm font-semibold hover:bg-accent-blue/90 transform hover:scale-[1.01] transition-all duration-200 shadow-md">
+                            <svg data-feather="search" class="w-4 h-4 mr-2"></svg>
+                            Detect Objects
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Detection Results Panel -->
+                <div class="bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl flex flex-col justify-between min-h-[450px]">
+                    <div class="flex flex-col h-full justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-4 border-b border-text-muted/10 pb-3">
+                                <h2 class="text-xl font-semibold">Detected Objects</h2>
+                                <span id="image-status-badge" class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-white/5 text-text-muted rounded-[4px] border border-white/[0.06]">
+                                    <span class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>
+                                    Waiting for Upload
+                                </span>
+                            </div>
+                            <div id="image-results-panel" class="text-text-light text-lg space-y-2 flex flex-col justify-center items-center text-center py-12 text-text-muted">
+                                <svg data-feather="activity" class="w-8 h-8 mb-2 text-text-muted/40"></svg>
+                                <p class="font-semibold text-text-light">Waiting for upload...</p>
+                                <p class="text-sm text-text-muted max-w-[200px] mt-1">Select an image and click "Detect Objects" to view results.</p>
+                            </div>
+                        </div>
+
+                        <!-- Post-Detection Summary inside the results card at the bottom -->
+                        <div id="image-summary-section" class="mt-6 pt-4 border-t border-text-muted/10 hidden">
+                            <h3 class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Detection Summary</h3>
+                            <div class="grid grid-cols-3 gap-3 text-[11px]">
+                                <div class="bg-background-dark/30 p-2.5 rounded-[4px] border border-white/[0.02] flex flex-col justify-between">
+                                    <p class="text-text-muted text-[9px] uppercase font-semibold tracking-wider">Unique Items</p>
+                                    <p id="image-summary-count" class="text-sm font-bold text-text-light mt-0.5">-</p>
+                                </div>
+                                <div class="bg-background-dark/30 p-2.5 rounded-[4px] border border-white/[0.02] flex flex-col justify-between">
+                                    <p class="text-text-muted text-[9px] uppercase font-semibold tracking-wider">Top Object</p>
+                                    <p id="image-summary-top" class="text-sm font-bold text-accent-blue mt-0.5 whitespace-normal break-words">-</p>
+                                </div>
+                                <div class="bg-background-dark/30 p-2.5 rounded-[4px] border border-white/[0.02] flex flex-col justify-between">
+                                    <p class="text-text-muted text-[9px] uppercase font-semibold tracking-wider">Proc. Time</p>
+                                    <p id="image-summary-time" class="text-sm font-bold text-text-light mt-0.5">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-8">
+                <button class="nav-link inline-flex items-center px-4 py-2 text-sm text-accent-blue hover:text-accent-blue/80 transition" data-page="home">
+                    <svg data-feather="arrow-left" class="w-4 h-4 mr-2"></svg>
+                    Back to Home
+                </button>
+            </div>
+        </section>
+
+
+
+        <section id="video-page" class="page-content">
+            <h1 class="text-3xl font-bold mb-4">Upload Video for Detection</h1>
+            <p class="text-text-muted mb-8">Select a video file and click Detect Objects.</p>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Video preview and detect button -->
+                <div class="lg:col-span-2 bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl relative">
+                    <div id="video-upload-area" class="w-full aspect-video rounded-[6px] overflow-hidden bg-black/40 flex items-center justify-center hover:border-accent-blue/50 border-2 border-dashed border-text-muted/30 transition relative">
+                        <video id="video-preview" class="w-full h-full object-contain hidden" controls></video>
+                        <img id="video-result-frame" class="w-full h-full object-contain hidden" src="" alt="Detection Frame Result">
+                        <button id="toggle-video-view-btn" class="absolute top-3 right-3 bg-black/75 hover:bg-black/90 text-text-light text-xs font-semibold px-3 py-1.5 rounded-[4px] border border-white/10 z-20 hidden">View Original Video</button>
+                        <label id="video-placeholder" for="video-upload-input" class="absolute inset-0 flex flex-col items-center justify-center text-center text-text-muted cursor-pointer">
+                            <img src="/uploads/video_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-10" alt="Upload Background">
+                            <div class="relative z-10 flex flex-col items-center">
+                                <svg data-feather="video" class="w-12 h-12 mb-2 text-accent-blue"></svg>
+                                <p class="font-semibold text-text-light">Click or Drop Video Here</p>
+                                <p class="text-xs text-text-muted mt-1">Supports MP4, AVI, MOV</p>
+                            </div>
+                        </label>
+                    </div>
+                    <input type="file" id="video-upload-input" class="hidden" accept="video/*">
+
+                    <div class="mt-4 flex justify-center space-x-3">
+                        <button id="detect-video-btn" class="flex items-center justify-center w-52 py-2.5 bg-accent-blue text-background-dark rounded-[6px] text-sm font-semibold hover:bg-accent-blue/90 transform hover:scale-[1.01] transition-all duration-200 shadow-md">
+                            <svg data-feather="search" class="w-4 h-4 mr-2"></svg>
+                            Detect Objects
+                        </button>
+                        <button id="change-video-btn" class="hidden flex items-center justify-center w-52 py-2.5 bg-white/5 text-text-muted border border-white/[0.06] rounded-[6px] text-sm font-semibold hover:bg-white/10 hover:text-text-light transform hover:scale-[1.01] transition-all duration-200 shadow-md">
+                            <svg data-feather="upload" class="w-4 h-4 mr-2"></svg>
+                            Change Video
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Results panel -->
+                <div class="bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl h-full flex flex-col justify-between min-h-[450px]">
+                    <div class="flex flex-col h-full justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-4 border-b border-text-muted/10 pb-2">
+                                <h2 class="text-xl font-semibold">Detected Objects</h2>
+                                <span id="video-status-badge" class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-white/5 text-text-muted rounded-[4px] border border-white/[0.06]">
+                                    <span class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>
+                                    Waiting for Upload
+                                </span>
+                            </div>
+                            <div id="video-results-panel" class="space-y-2 text-lg text-text-light flex flex-col justify-center items-center text-center py-12 text-text-muted">
+                                <svg data-feather="activity" class="w-8 h-8 mb-2 text-text-muted/40"></svg>
+                                <p class="font-semibold text-text-light">Waiting for upload...</p>
+                                <p class="text-sm text-text-muted max-w-[200px] mt-1">Select a video file and click "Detect Objects" to view results.</p>
+                            </div>
+                        </div>
+
+                        <!-- Post-Detection Summary inside the results card at the bottom -->
+                        <div id="video-summary-section" class="mt-6 pt-4 border-t border-text-muted/10 hidden">
+                            <h3 class="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-3">Detection Summary</h3>
+                            <div class="grid grid-cols-3 gap-3 text-[11px]">
+                                <div class="bg-background-dark/30 p-2.5 rounded-[4px] border border-white/[0.02] flex flex-col justify-between">
+                                    <p class="text-text-muted text-[9px] uppercase font-semibold tracking-wider">Unique Items</p>
+                                    <p id="video-summary-count" class="text-sm font-bold text-text-light mt-0.5">-</p>
+                                </div>
+                                <div class="bg-background-dark/30 p-2.5 rounded-[4px] border border-white/[0.02] flex flex-col justify-between">
+                                    <p class="text-text-muted text-[9px] uppercase font-semibold tracking-wider">Top Object</p>
+                                    <p id="video-summary-top" class="text-sm font-bold text-accent-blue mt-0.5 whitespace-normal break-words">-</p>
+                                </div>
+                                <div class="bg-background-dark/30 p-2.5 rounded-[4px] border border-white/[0.02] flex flex-col justify-between">
+                                    <p class="text-text-muted text-[9px] uppercase font-semibold tracking-wider">Proc. Time</p>
+                                    <p id="video-summary-time" class="text-sm font-bold text-text-light mt-0.5">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+
+
+        <section id="search-page" class="page-content">
+            <h1 class="text-3xl font-bold mb-2">Object Search Workstation</h1>
+            <p class="text-text-muted mb-6">Define search targets, select source media, and analyze target detections.</p>
+
+            <!-- SECTION 1: Object Search Command Center -->
+            <div class="bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl space-y-4 mb-8 w-full">
+                <!-- Header Title -->
+                <div class="flex items-center justify-between pb-1">
+                    <h2 class="text-lg font-bold text-text-light uppercase tracking-wider">OBJECT SEARCH COMMAND CENTER</h2>
+                    <div class="text-xs text-text-muted flex items-center space-x-1">
+                        <span>Classes Available: <strong class="text-text-light">80</strong></span>
+                    </div>
+                </div>
+                
+                <!-- Divider line -->
+                <div class="border-t border-white/[0.06] my-2"></div>
+
+                <!-- Search Targets input area -->
+                <div class="space-y-3 relative">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-bold text-text-muted uppercase tracking-wider">Search Targets</label>
+                        <span id="search-targets-helper" class="text-[11px] font-bold text-accent-blue bg-accent-blue/10 border border-accent-blue/20 px-2 py-0.5 rounded">0 Targets Selected</span>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <div class="flex-grow flex flex-wrap items-center bg-background-dark/50 border border-text-muted/30 rounded-[6px] px-3 py-1.5 focus-within:ring-2 focus-within:ring-accent-blue transition min-h-[46px] relative">
+                            <div id="search-tags-container" class="flex flex-wrap gap-1.5 mr-2">
+                                <!-- Dynamic Tag Chips -->
+                            </div>
+                            <input type="text" id="search-query-input" placeholder="Type object & press Enter..." class="flex-grow bg-transparent text-base focus:outline-none min-w-[120px] py-1 text-text-light" autocomplete="off">
+                            
+                            <!-- Autocomplete Dropdown List -->
+                            <div id="search-autocomplete-dropdown" class="hidden absolute left-0 right-0 top-full mt-1.5 bg-card-dark border border-white/10 rounded-[6px] shadow-2xl max-h-[220px] overflow-y-auto z-40">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Popular Targets Presets styled as rounded chips/boxes directly below -->
+                    <div class="flex flex-wrap gap-2 items-center pt-1">
+                        <span class="text-xs text-text-muted font-semibold mr-1">Popular Targets:</span>
+                        <button type="button" class="search-preset-chip px-3 py-1.5 text-xs bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-light rounded-full border border-white/[0.06] transition" data-val="person">Person</button>
+                        <button type="button" class="search-preset-chip px-3 py-1.5 text-xs bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-light rounded-full border border-white/[0.06] transition" data-val="car">Car</button>
+                        <button type="button" class="search-preset-chip px-3 py-1.5 text-xs bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-light rounded-full border border-white/[0.06] transition" data-val="dog">Dog</button>
+                        <button type="button" class="search-preset-chip px-3 py-1.5 text-xs bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-light rounded-full border border-white/[0.06] transition" data-val="laptop">Laptop</button>
+                        <button type="button" class="search-preset-chip px-3 py-1.5 text-xs bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-light rounded-full border border-white/[0.06] transition" data-val="cell phone">Cell Phone</button>
+                        <button type="button" class="search-preset-chip px-3 py-1.5 text-xs bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-light rounded-full border border-white/[0.06] transition" data-val="bottle">Bottle</button>
+                    </div>
+                </div>
+
+                <!-- Divider line -->
+                <div class="border-t border-white/[0.06] my-2"></div>
+
+                <!-- Combined Control Row: Browse, Source Selector, and Confidence Slider -->
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 py-1.5">
+                    <!-- Left: Browse Objects Toggle Button (Solid premium blue styling) -->
+                    <div class="flex items-center">
+                        <button id="search-browse-toggle-btn" type="button" class="px-4 py-2.5 bg-accent-blue hover:bg-accent-blue/90 border border-transparent text-background-dark rounded-[6px] text-xs font-bold transition flex items-center shadow-md transform hover:scale-[1.02] active:scale-[0.98]">
+                            <i data-feather="grid" class="w-3.5 h-3.5 mr-1.5"></i>
+                            <span>Browse Objects</span>
+                        </button>
+                    </div>
+
+                    <!-- Middle: Source Selection Tabs (Webcam | Image | Video) -->
+                    <div class="flex items-center justify-start md:justify-center">
+                        <div class="flex items-center space-x-1 bg-background-dark/60 p-1 rounded-[6px] border border-white/[0.06]">
+                            <button id="search-tab-webcam" data-source="webcam" class="search-tab-btn px-5 py-1.5 text-xs font-bold rounded-[4px] transition-all duration-200 flex items-center space-x-1.5 text-text-muted hover:text-text-light bg-transparent select-none">
+                                <i data-feather="video" class="w-3.5 h-3.5"></i>
+                                <span>Webcam</span>
+                            </button>
+                            <button id="search-tab-image" data-source="image" class="search-tab-btn px-5 py-1.5 text-xs font-bold rounded-[4px] transition-all duration-200 flex items-center space-x-1.5 text-text-muted hover:text-text-light bg-transparent select-none">
+                                <i data-feather="image" class="w-3.5 h-3.5"></i>
+                                <span>Image</span>
+                            </button>
+                            <button id="search-tab-video" data-source="video" class="search-tab-btn px-5 py-1.5 text-xs font-bold rounded-[4px] transition-all duration-200 flex items-center space-x-1.5 text-text-muted hover:text-text-light bg-transparent select-none">
+                                <i data-feather="film" class="w-3.5 h-3.5"></i>
+                                <span>Video</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Confidence Threshold controls -->
+                    <div class="flex items-center space-x-3 justify-between md:justify-end">
+                        <span class="text-xs font-bold text-text-muted uppercase tracking-wider">Confidence</span>
+                        <div class="flex items-center space-x-2.5">
+                            <span id="search-confidence-badge" class="text-xs font-bold text-accent-blue bg-accent-blue/10 border border-accent-blue/20 px-2.5 py-0.5 rounded">25%</span>
+                            <input type="range" id="search-confidence-slider" min="10" max="100" value="25" class="w-32 sm:w-40 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-accent-blue focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Collapsible Browser (Grouped Checkbox Catalog) -->
+                <div id="supported-objects-browser" class="hidden border border-white/[0.06] bg-background-dark/30 p-4 rounded-[6px] max-h-[360px] overflow-y-auto animate-slide-down mt-2">
+                    <div id="supported-objects-categories-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: Viewport & Live Telemetry Panel -->
+            <div class="grid grid-cols-10 gap-6 lg:gap-8 mb-8">
+                <!-- 70% Viewport Container -->
+                <div class="col-span-10 lg:col-span-7 bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl flex flex-col justify-between">
+                    <div id="search-viewports-container" class="w-full aspect-video rounded-[6px] overflow-hidden bg-black/40 flex items-center justify-center border border-white/[0.06] relative">
+                        
+                        <!-- 1. Webcam Viewport -->
+                        <div id="search-webcam-viewport" class="w-full h-full flex flex-col items-center justify-center relative">
+                            <img id="search-webcam-feed" class="w-full h-full object-contain hidden" src="" alt="Webcam Feed">
+                            <div id="search-webcam-standby" class="flex flex-col items-center justify-center p-6 text-center">
+                                <i data-feather="camera" class="w-16 h-16 mx-auto mb-3 text-accent-blue/70"></i>
+                                <p class="text-text-muted mb-2 font-semibold">Webcam Standby</p>
+                                <p class="text-xs text-text-muted max-w-[280px]">Webcam stream is inactive. Click "Start Search" to initialize camera stream.</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. Image Viewport -->
+                        <div id="search-image-viewport" class="w-full h-full flex flex-col items-center justify-center hidden relative">
+                            <div id="search-image-upload-area" class="w-full h-full flex flex-col items-center justify-center relative">
+                                <canvas id="search-image-canvas" class="w-full h-full object-contain hidden"></canvas>
+                                <label id="search-image-placeholder" for="search-image-input" class="absolute inset-0 flex flex-col items-center justify-center text-text-muted cursor-pointer p-6 text-center">
+                                    <i data-feather="image" class="w-12 h-12 mb-2 text-accent-blue/80"></i>
+                                    <p class="font-semibold text-text-light">Click or Drop Image Here</p>
+                                    <p class="text-xs text-text-muted mt-1">Supports JPG, PNG</p>
+                                </label>
+                                <input type="file" id="search-image-input" class="hidden" accept="image/*">
+                            </div>
+                        </div>
+
+                        <!-- 3. Video Viewport -->
+                        <div id="search-video-viewport" class="w-full h-full flex flex-col items-center justify-center hidden relative">
+                            <div id="search-video-upload-area" class="w-full h-full flex flex-col items-center justify-center relative">
+                                <video id="search-video-preview" class="w-full h-full object-contain hidden" controls></video>
+                                <img id="search-video-result-frame" class="w-full h-full object-contain hidden" src="" alt="Detection Frame Result">
+                                <button id="search-toggle-video-view-btn" class="absolute top-3 right-3 bg-black/75 hover:bg-black/90 text-text-light text-xs font-semibold px-3 py-1.5 rounded-[4px] border border-white/10 z-20 hidden">View Original Video</button>
+                                <label id="search-video-placeholder" for="search-video-input" class="absolute inset-0 flex flex-col items-center justify-center text-text-muted cursor-pointer p-6 text-center">
+                                    <i data-feather="video" class="w-12 h-12 mb-2 text-accent-blue/80"></i>
+                                    <p class="font-semibold text-text-light">Click or Drop Video Here</p>
+                                    <p class="text-xs text-text-muted mt-1">Supports MP4, AVI, MOV</p>
+                                </label>
+                                <input type="file" id="search-video-input" class="hidden" accept="video/*">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Viewport Control Area -->
+                    <div class="mt-4 flex justify-center items-center space-x-3">
+                        <!-- Unified Action Button inside Viewport Section -->
+                        <button id="viewport-search-btn" class="flex items-center justify-center w-52 py-2.5 bg-green-500 hover:bg-green-600 text-background-dark rounded-[6px] text-sm font-semibold transform hover:scale-[1.01] transition-all duration-200 shadow-md">
+                            <i data-feather="play" class="w-4 h-4 mr-2"></i>
+                            <span>Activate Search</span>
+                        </button>
+
+                        <button id="search-image-change-btn" class="hidden flex items-center justify-center w-40 py-2.5 bg-white/5 text-text-muted border border-white/[0.06] rounded-[6px] text-sm font-semibold hover:bg-white/10 hover:text-text-light transition shadow-md animate-fade-in">
+                            <i data-feather="upload" class="w-4 h-4 mr-1.5"></i>
+                            <span>Change Image</span>
+                        </button>
+                        <button id="search-video-change-btn" class="hidden flex items-center justify-center w-40 py-2.5 bg-white/5 text-text-muted border border-white/[0.06] rounded-[6px] text-sm font-semibold hover:bg-white/10 hover:text-text-light transition shadow-md animate-fade-in">
+                            <i data-feather="upload" class="w-4 h-4 mr-1.5"></i>
+                            <span>Change Video</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 30% Search Status / Telemetry Panel -->
+                <div class="col-span-10 lg:col-span-3 bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl flex flex-col justify-start min-h-[300px]">
+                    <div class="border-b border-white/[0.04] pb-2 mb-4 flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-text-muted uppercase tracking-wider">Search Status Panel</h3>
+                    </div>
+
+                    <!-- Guidance Empty State (visible before first search) -->
+                    <div id="search-telemetry-guidance" class="text-center py-12 text-text-muted flex flex-col items-center justify-center flex-grow">
+                        <i data-feather="info" class="w-8 h-8 mb-3 text-accent-blue/50"></i>
+                        <p class="text-sm font-semibold text-text-light mb-1">Workstation Inactive</p>
+                        <p class="text-xs text-text-muted max-w-[180px] mx-auto">Select one or more target objects, choose a source, and start a search.</p>
+                    </div>
+
+                    <!-- Active Telemetry Container (hidden by default) -->
+                    <div id="search-telemetry-metrics" class="space-y-5 hidden flex-grow">
+                        <!-- 1. Search Targets -->
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold text-text-muted/60 uppercase tracking-wider mb-1">Search Targets</span>
+                            <span id="telemetry-targets-list" class="text-sm font-semibold text-text-light">-</span>
+                        </div>
+
+                        <!-- 2. Status Badge -->
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold text-text-muted/60 uppercase tracking-wider mb-1">Search Status</span>
+                            <div class="mt-1">
+                                <span id="search-status-badge" class="inline-flex items-center px-3 py-1 rounded-[4px] text-xs font-bold bg-white/5 text-text-muted border border-white/[0.06] transition-all">
+                                    <span id="status-indicator-dot" class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>
+                                    <span id="status-badge-text">Ready</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- 3. Matches Found This Session -->
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold text-text-muted/60 uppercase tracking-wider mb-1">Matches Found This Session</span>
+                            <span id="telemetry-matches-val" class="text-2xl font-extrabold text-accent-blue">0</span>
+                        </div>
+
+                        <!-- 4. Highest Confidence Seen -->
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold text-text-muted/60 uppercase tracking-wider mb-1">Highest Confidence Seen</span>
+                            <span id="telemetry-confidence-val" class="text-sm font-bold text-text-light">-</span>
+                        </div>
+
+                        <!-- 5. Session Duration -->
+                        <div class="flex flex-col">
+                            <span id="telemetry-duration-label" class="text-[10px] font-bold text-text-muted/60 uppercase tracking-wider mb-1">Session Duration</span>
+                            <span id="telemetry-duration-val" class="text-sm font-bold text-text-light">-</span>
+                        </div>
+
+                        <!-- 6. Latest Detection -->
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold text-text-muted/60 uppercase tracking-wider mb-1">Latest Detection</span>
+                            <span id="telemetry-latest-val" class="text-sm font-semibold text-text-light">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: Search Findings Report -->
+            <div id="search-findings-report" class="hidden bg-card-dark rounded-[10px] border border-white/[0.06] shadow-xl p-6 w-full animate-slide-up mb-8">
+                <div class="flex items-center justify-between border-b border-text-muted/10 pb-4 mb-5">
+                    <div class="flex items-center space-x-2.5">
+                        <i data-feather="file-text" class="w-5 h-5 text-accent-blue"></i>
+                        <h2 class="text-lg font-bold text-text-light uppercase tracking-wider">Search Findings Report</h2>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button id="search-clear-findings-btn" class="px-3 py-1 bg-white/5 border border-white/10 rounded-[4px] text-xs font-semibold text-text-muted hover:text-text-light hover:bg-white/10 transition">Clear Findings</button>
+                        <span id="findings-status-badge" class="inline-flex items-center px-2.5 py-0.5 rounded-[4px] text-xs font-bold bg-white/5 border">FOUND</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Column 1: OVERVIEW -->
+                    <div class="bg-background-dark/30 p-5 rounded-[8px] border border-white/[0.04] space-y-4">
+                        <h3 class="text-xs font-bold text-accent-blue uppercase tracking-wider border-b border-white/[0.04] pb-2">Overview</h3>
+                        <div class="grid grid-cols-2 gap-y-3 text-xs">
+                            <span class="text-text-muted font-medium">Search ID:</span>
+                            <span id="findings-search-id" class="text-text-light font-bold text-right">-</span>
+                            
+                            <span class="text-text-muted font-medium">Source:</span>
+                            <span id="findings-source" class="text-text-light font-bold text-right">-</span>
+                            
+                            <span class="text-text-muted font-medium">Duration:</span>
+                            <span id="findings-duration" class="text-text-light font-bold text-right">-</span>
+                            
+                            <span class="text-text-muted font-medium">Status:</span>
+                            <span id="findings-status-text" class="text-text-light font-bold text-right">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: TARGETS -->
+                    <div class="bg-background-dark/30 p-5 rounded-[8px] border border-white/[0.04] space-y-4 flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-xs font-bold text-accent-blue uppercase tracking-wider border-b border-white/[0.04] pb-2 mb-3">Targets</h3>
+                            <div id="findings-query-targets" class="flex flex-wrap gap-1.5">
+                                <!-- Dynamic Targets chips -->
+                                -
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-text-muted/40 mt-4">
+                            Configured at execution start
+                        </div>
+                    </div>
+
+                    <!-- Column 3: RESULTS -->
+                    <div class="bg-background-dark/30 p-5 rounded-[8px] border border-white/[0.04] space-y-4">
+                        <h3 class="text-xs font-bold text-accent-blue uppercase tracking-wider border-b border-white/[0.04] pb-2">Results</h3>
+                        <div class="grid grid-cols-2 gap-y-3 text-xs">
+                            <span class="text-text-muted font-medium">Total Matches:</span>
+                            <span id="findings-total-matches" class="text-lg font-bold text-accent-blue text-right">0</span>
+                            
+                            <span class="text-text-muted font-medium">Highest Confidence:</span>
+                            <span id="findings-max-confidence" class="text-lg font-bold text-text-light text-right">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Object Breakdown (Full Width) -->
+                    <div class="md:col-span-3 bg-background-dark/20 p-5 rounded-[8px] border border-white/[0.04] mt-2">
+                        <h3 class="text-xs font-bold text-text-light uppercase tracking-wider mb-4">Object Breakdown</h3>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-sm">
+                                <thead>
+                                    <tr class="border-b border-white/10 text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                                        <th class="py-3 px-4">Class Target</th>
+                                        <th class="py-3 px-4 text-center">Detections / Occurrences</th>
+                                        <th class="py-3 px-4 text-right">Max Confidence Recorded</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="findings-objects-tbody" class="text-text-light">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Custom Modal Dialog for Source Switching Confirmation -->
+    <div id="source-switch-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+        <div class="bg-card-dark rounded-[10px] border border-white/[0.1] shadow-2xl p-6 max-w-sm w-full mx-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center mx-auto mb-4 border border-yellow-500/20">
+                <svg data-feather="alert-triangle" class="w-6 h-6 text-yellow-500"></svg>
+            </div>
+            <h3 class="text-lg font-bold text-text-light mb-2">Active Search Running</h3>
+            <p class="text-sm text-text-muted mb-6">Changing the source will stop your active search session. Do you want to continue?</p>
+            <div class="flex space-x-3">
+                <button id="source-switch-cancel" class="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-[6px] text-sm font-semibold text-text-muted hover:text-text-light transition">Cancel</button>
+                <button id="source-switch-continue" class="flex-1 py-2 bg-yellow-500 hover:bg-yellow-600 rounded-[6px] text-sm font-bold text-background-dark transition">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- <footer class="bg-card-dark border-t border-text-muted/10 mt-8">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center text-sm text-text-muted">
+            <div class="flex space-x-4 mb-2 sm:mb-0">
+                <a href="#" class="hover:text-text-light transition">Quick Links</a>
+                <a href="#" class="hover:text-text-light transition">Resources</a>
+                <a href="#" class="hover:text-text-light transition">Company</a>
+            </div>
+            <div class="flex items-center space-x-4">
+                <p class="text-xs mr-4">Made with <span class="text-accent-blue font-bold">Visily</span></p>
+                <a href="#"><svg data-feather="facebook" class="w-4 h-4 hover:text-text-light transition"></svg></a>
+                <a href="#"><svg data-feather="twitter" class="w-4 h-4 hover:text-text-light transition"></svg></a>
+                <a href="#"><svg data-feather="linkedin" class="w-4 h-4 hover:text-text-light transition"></svg></a>
+            </div>
+        </div>
+    </footer> -->
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            feather.replace(); // Initialize Feather icons
+
+            // Global Workstation Alert functions
+            window.alertTimeoutId = null;
+            function showGlobalAlert(message) {
+                const banner = document.getElementById('global-alert-banner');
+                const msgSpan = document.getElementById('global-alert-message');
+                if (banner && msgSpan) {
+                    msgSpan.textContent = message;
+                    banner.classList.remove('hidden');
+                    feather.replace();
+                    
+                    // Auto-dismiss after 6 seconds
+                    if (window.alertTimeoutId) clearTimeout(window.alertTimeoutId);
+                    window.alertTimeoutId = setTimeout(dismissGlobalAlert, 6000);
+                }
+            }
+
+            function dismissGlobalAlert() {
+                const banner = document.getElementById('global-alert-banner');
+                if (banner) {
+                    banner.classList.add('hidden');
+                }
+                if (window.alertTimeoutId) {
+                    clearTimeout(window.alertTimeoutId);
+                    window.alertTimeoutId = null;
+                }
+            }
+
+            window.showGlobalAlert = showGlobalAlert;
+            window.dismissGlobalAlert = dismissGlobalAlert;
+
+            const alertDismiss = document.getElementById('global-alert-dismiss');
+            if (alertDismiss) {
+                alertDismiss.addEventListener('click', dismissGlobalAlert);
+            }
+
+            const navLinks = document.querySelectorAll('.nav-link');
+            const pages = document.querySelectorAll('.page-content');
+
+            // Function to handle page switching
+            let switchPage = (targetPage) => {
+                // Dismiss global alert banner
+                dismissGlobalAlert();
+
+                // 1. Stop regular webcam if running
+                if (running || (typeof intervalId !== 'undefined' && intervalId)) {
+                    if (typeof intervalId !== 'undefined' && intervalId) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                    }
+                    running = false;
+                    fetch('/stop_webcam');
+                    const webcamStatusBadge = document.getElementById('webcam-status-badge');
+                    if (webcamStatusBadge) {
+                        webcamStatusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-white/5 text-text-muted rounded-[4px] border border-white/[0.06]";
+                        webcamStatusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>Idle`;
+                    }
+                    const videoFrame = document.getElementById('video-frame');
+                    if (videoFrame) {
+                        videoFrame.innerHTML = `
+                            <img src="/uploads/webcam_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-20" alt="Webcam Standby Background">
+                            <div class="relative text-center text-text-light z-10 p-6">
+                                <svg data-feather="video" class="w-10 h-10 mx-auto mb-3 text-accent-blue"></svg>
+                                <h3 class="text-lg font-semibold text-text-light">Webcam Ready</h3>
+                                <p class="text-sm text-text-muted mt-1">System ready. Click "Start Detection" to begin real-time analysis.</p>
+                            </div>`;
+                    }
+                    const detectionPanel = document.getElementById('detection-panel');
+                    if (detectionPanel) {
+                        detectionPanel.innerHTML = `
+                            <svg data-feather="activity" class="w-8 h-8 mb-2 text-text-muted/40"></svg>
+                            <p class="font-semibold text-text-light">Waiting for detection...</p>
+                            <p class="text-sm text-text-muted max-w-[240px] mt-1">Detected objects and confidence scores will appear here once analysis begins.</p>`;
+                        detectionPanel.className = "text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                    }
+                }
+
+                // 2. Stop regular video polling if running
+                if (typeof videoIntervalId !== 'undefined' && videoIntervalId) {
+                    clearInterval(videoIntervalId);
+                    videoIntervalId = null;
+                    const vdetectBtn = document.getElementById('detect-video-btn');
+                    if (vdetectBtn) {
+                        vdetectBtn.disabled = false;
+                        vdetectBtn.innerHTML = `<svg data-feather="search" class="w-4 h-4 mr-2 inline"></svg>Detect Objects`;
+                    }
+                }
+
+                // 3. Stop search webcam & video if running
+                if (typeof stopAllSearchDetections === 'function') {
+                    stopAllSearchDetections();
+                }
+
+                // 4. Always call backend video stop just in case
+                fetch('/stop_video_detection', { method: 'POST' });
+
+                pages.forEach(page => {
+                    page.classList.remove('active');
+                    if (page.id === `${targetPage}-page`) {
+                        page.classList.add('active');
+                    }
+                });
+
+                // Highlight the active link in the navbar
+                document.querySelectorAll('.nav-link[data-page]').forEach(link => {
+                    link.classList.remove('text-accent-blue', 'font-bold');
+                });
+                const activeLink = document.querySelector(`.nav-link[data-page="${targetPage}"]`);
+                if (activeLink) {
+                    activeLink.classList.add('text-accent-blue', 'font-bold');
+                }
+                feather.replace();
+            };
+
+            // Add event listeners to all navigation links and buttons
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const targetPage = e.currentTarget.getAttribute('data-page');
+                    if (targetPage) {
+                        switchPage(targetPage);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                });
+            });
+
+            // WEBCAM Detection
+            let running = false;
+            let intervalId;
+            let sessionStartTime = null;
+            let sessionObjects = {};
+            const videoFrame = document.getElementById('video-frame');
+            const detectionPanel = document.getElementById('detection-panel');
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+
+            startBtn.addEventListener('click', async () => {
+                if (!running) {
+                    const res = await fetch('/start_webcam');
+                    const data = await res.json();
+                    if (data.success) {
+                        running = true;
+                        
+                        // Reset session metrics
+                        sessionStartTime = Date.now();
+                        sessionObjects = {};
+                        
+                        // Hide summary card smoothly
+                        const summaryCard = document.getElementById('webcam-summary-card');
+                        if (summaryCard) {
+                            summaryCard.classList.remove('show');
+                        }
+
+                        videoFrame.innerHTML = `<img id="live-feed" src="/video_feed" class="w-full h-full object-cover rounded-[6px]">`;
+
+                        const statusBadge = document.getElementById('webcam-status-badge');
+                        if (statusBadge) {
+                            statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-500/10 text-green-400 rounded-[4px] border border-green-500/20";
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>Running`;
+                        }
+
+                        intervalId = setInterval(async () => {
+                            const res = await fetch('/webcam_data');
+                            const objects = await res.json();
+                            
+                            // Accumulate detection metrics
+                            if (objects && objects.length > 0) {
+                                objects.forEach(obj => {
+                                    if (!sessionObjects[obj.name]) {
+                                        sessionObjects[obj.name] = { count: 0, maxConfidence: 0 };
+                                    }
+                                    sessionObjects[obj.name].count += 1;
+                                    sessionObjects[obj.name].maxConfidence = Math.max(sessionObjects[obj.name].maxConfidence, obj.confidence);
+                                });
+                            }
+
+                            if (objects.length === 0) {
+                                detectionPanel.innerHTML = '<p class="text-text-muted text-center py-6">Analyzing... No objects detected yet.</p>';
+                                detectionPanel.className = "text-text-light text-lg space-y-2";
+                            } else {
+                                detectionPanel.innerHTML = '';
+                                detectionPanel.className = "text-text-light text-lg space-y-2";
+                                objects.forEach(obj => {
+                                    detectionPanel.innerHTML += `
+                                        <div class="flex justify-between items-center border-b border-text-muted/10 pb-2">
+                                            <span class="font-semibold text-text-light text-base">${obj.name}</span>
+                                            <span class="px-2 py-0.5 text-xs font-semibold rounded-[4px] bg-accent-blue/30 text-accent-blue">${Math.round(obj.confidence * 100)}%</span>
+                                        </div>`;
+                                });
+                            }
+                        }, 500);
+                    }
+                }
+            });
+
+            stopBtn.addEventListener('click', async () => {
+                if (running) {
+                    await fetch('/stop_webcam');
+                    clearInterval(intervalId);
+                    running = false;
+                    
+                    // Calculate and populate summary metrics
+                    const durationSeconds = Math.round((Date.now() - sessionStartTime) / 1000);
+                    
+                    // Format duration
+                    let durationText = `${durationSeconds}s`;
+                    if (durationSeconds >= 60) {
+                        const minutes = Math.floor(durationSeconds / 60);
+                        const remainingSeconds = durationSeconds % 60;
+                        durationText = `${minutes}m ${remainingSeconds}s`;
+                    }
+                    
+                    const uniqueObjectsCount = Object.keys(sessionObjects).length;
+                    
+                    // Identify top object
+                    let topObject = "-";
+                    let maxCount = 0;
+                    for (const name in sessionObjects) {
+                        if (sessionObjects[name].count > maxCount) {
+                            maxCount = sessionObjects[name].count;
+                            topObject = name;
+                        }
+                    }
+                    
+                    // Populate summary DOM
+                    const summaryCard = document.getElementById('webcam-summary-card');
+                    const emptyState = document.getElementById('summary-empty-state');
+                    const contentState = document.getElementById('summary-content-state');
+                    
+                    if (summaryCard) {
+                        if (uniqueObjectsCount === 0) {
+                            emptyState.classList.remove('hidden');
+                            contentState.classList.add('hidden');
+                        } else {
+                            emptyState.classList.add('hidden');
+                            contentState.classList.remove('hidden');
+                            
+                            document.getElementById('summary-duration').textContent = durationText;
+                            document.getElementById('summary-unique-objects').textContent = uniqueObjectsCount;
+                            document.getElementById('summary-top-object').textContent = topObject.charAt(0).toUpperCase() + topObject.slice(1);
+                            
+                            // Render chips
+                            const listContainer = document.getElementById('summary-objects-list');
+                            listContainer.innerHTML = '';
+                            
+                            const sortedObjects = Object.entries(sessionObjects).sort((a, b) => b[1].count - a[1].count);
+                            sortedObjects.forEach(([name, data]) => {
+                                const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+                                listContainer.innerHTML += `
+                                    <div class="inline-flex items-center space-x-2 bg-background-dark/50 px-3 py-1.5 rounded-[4px] border border-text-muted/10">
+                                        <span class="text-sm font-medium text-text-light">${formattedName}</span>
+                                        <span class="text-xs font-semibold px-2 py-0.5 rounded-[4px] bg-accent-blue/25 text-accent-blue">${data.count}x</span>
+                                    </div>`;
+                            });
+                        }
+                        
+                        // Reveal transition
+                        summaryCard.classList.add('show');
+                    }
+
+                    videoFrame.innerHTML = `
+                        <img src="/uploads/webcam_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-20" alt="Webcam Standby Background">
+                        <div class="relative text-center text-text-light z-10 p-6">
+                            <svg data-feather="video" class="w-10 h-10 mx-auto mb-3 text-accent-blue"></svg>
+                            <h3 class="text-lg font-semibold text-text-light">Webcam Ready</h3>
+                            <p class="text-sm text-text-muted mt-1">System ready. Click "Start Detection" to begin real-time analysis.</p>
+                        </div>`;
+                    
+                    const statusBadge = document.getElementById('webcam-status-badge');
+                    if (statusBadge) {
+                        statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-white/5 text-text-muted rounded-[4px] border border-white/[0.06]";
+                        statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>Idle`;
+                    }
+                    if (uniqueObjectsCount > 0) {
+                        detectionPanel.innerHTML = `
+                            <svg data-feather="check-circle" class="w-8 h-8 mb-2 text-accent-blue"></svg>
+                            <p class="font-semibold text-text-light">Session Complete</p>
+                            <p class="text-sm text-text-muted max-w-[240px] mt-1">Analysis stopped. A detailed session summary has been generated below.</p>`;
+                    } else {
+                        detectionPanel.innerHTML = `
+                            <svg data-feather="activity" class="w-8 h-8 mb-2 text-text-muted/40"></svg>
+                            <p class="font-semibold text-text-light">Waiting for detection...</p>
+                            <p class="text-sm text-text-muted max-w-[240px] mt-1">Detected objects and confidence scores will appear here once analysis begins.</p>`;
+                    }
+                    detectionPanel.className = "text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                    feather.replace();
+                }
+            });
+
+            // IMAGE DETECTION
+
+            // Grab elements
+            const imageUploadInput = document.getElementById('image-upload-input');
+            const imagePreview = document.getElementById('image-preview');
+            const uploadPlaceholder = document.getElementById('upload-placeholder');
+            const detectBtn = document.getElementById('detect-image-btn');
+            const imageResultsPanel = document.getElementById('image-results-panel');
+            const imageUploadArea = document.getElementById('image-upload-area');
+            const imageSummarySection = document.getElementById('image-summary-section');
+
+            // When file is selected → preview it
+            imageUploadInput.addEventListener('change', () => {
+                if (imageUploadInput.files && imageUploadInput.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        imagePreview.src = e.target.result;
+                        imagePreview.classList.remove('loaded'); // Reset fade
+                        uploadPlaceholder.style.display = 'none'; // hide placeholder
+                        
+                        // Refine dropzone border to solid when image is loaded
+                        if (imageUploadArea) {
+                            imageUploadArea.classList.remove('border-2', 'border-dashed', 'border-text-muted/30');
+                            imageUploadArea.classList.add('border', 'border-white/[0.06]');
+                        }
+
+                        // Hide summary section
+                        if (imageSummarySection) {
+                            imageSummarySection.classList.add('hidden');
+                        }
+                        
+                        // Set status to ready
+                        const statusBadge = document.getElementById('image-status-badge');
+                        if (statusBadge) {
+                            statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-500/10 text-blue-400 rounded-[4px] border border-blue-500/20";
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-blue-500 rounded-full mr-1.5"></span>Ready for Detection`;
+                        }
+                        
+                        imageResultsPanel.className = "text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                        imageResultsPanel.innerHTML = `
+                            <svg data-feather="image" class="w-8 h-8 mb-2 text-accent-blue/60"></svg>
+                            <p class="font-semibold text-text-light text-base">Image Selected</p>
+                            <p class="text-sm text-text-muted max-w-[200px] mt-1">Ready for analysis. Click "Detect Objects" to start.</p>`;
+                        feather.replace();
+                    }
+                    reader.readAsDataURL(imageUploadInput.files[0]);
+                }
+            });
+
+            // Fade-in after image loads
+            imagePreview.onload = () => {
+                imagePreview.classList.add('loaded');
+            };
+
+            // Detect objects when clicking detect button
+            detectBtn.addEventListener('click', async () => {
+                if (!imageUploadInput.files || imageUploadInput.files.length === 0) return;
+
+                const formData = new FormData();
+                formData.append('image', imageUploadInput.files[0]);
+
+                detectBtn.disabled = true;
+                detectBtn.innerHTML = `
+                    <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-background-dark inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Detecting...`;
+
+                const statusBadge = document.getElementById('image-status-badge');
+                if (statusBadge) {
+                    statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-yellow-500/10 text-yellow-500 rounded-[4px] border border-yellow-500/20";
+                    statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-yellow-500 rounded-full mr-1.5 animate-pulse"></span>Processing`;
+                }
+                
+                // Hide summary section while processing
+                if (imageSummarySection) {
+                    imageSummarySection.classList.add('hidden');
+                }
+
+                imageResultsPanel.className = "text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                imageResultsPanel.innerHTML = '<p class="text-text-muted text-center py-6">Analyzing image...</p>';
+
+                const startTime = Date.now();
+
+                try {
+                    const res = await fetch('/upload_image', { 
+                        method: 'POST', 
+                        body: formData 
+                    });
+
+                    const data = await res.json();
+                    
+                    const processingTimeMs = Date.now() - startTime;
+                    const processingTimeText = `${(processingTimeMs / 1000).toFixed(2)}s`;
+
+                    detectBtn.disabled = false;
+                    detectBtn.innerHTML = `<svg data-feather="search" class="w-4 h-4 mr-2 inline"></svg>Detect Objects`;
+                    feather.replace();
+
+                    if (data.success) {
+                        if (data.image) {
+                            imagePreview.src = data.image;
+                            imagePreview.classList.remove('loaded'); // Reset fade for processed image
+                        }
+
+                        // Show status as complete
+                        if (statusBadge) {
+                            statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-500/10 text-green-400 rounded-[4px] border border-green-500/20";
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>Complete`;
+                        }
+
+                        // Show detected objects
+                        imageResultsPanel.innerHTML = '';
+                        if (!data.objects || data.objects.length === 0) {
+                            imageResultsPanel.className = "text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                            imageResultsPanel.innerHTML = `
+                                <svg data-feather="slash" class="w-8 h-8 mb-2 text-text-muted/40"></svg>
+                                <p class="font-semibold text-text-light">No Objects Detected</p>
+                                <p class="text-sm text-text-muted max-w-[200px] mt-1">No items found in frame.</p>`;
+                            feather.replace();
+                        } else {
+                            imageResultsPanel.className = "space-y-2 text-lg text-text-light";
+                            data.objects.forEach(obj => {
+                                const formattedName = obj.name.charAt(0).toUpperCase() + obj.name.slice(1);
+                                imageResultsPanel.innerHTML += `
+                                    <div class="flex justify-between items-center border-b border-text-muted/10 pb-2">
+                                        <span class="font-semibold text-text-light text-base">${formattedName}</span>
+                                        <span class="px-2 py-0.5 text-xs font-semibold rounded-[4px] bg-accent-blue/30 text-accent-blue">${Math.round(obj.confidence * 100)}%</span>
+                                    </div>`;
+                            });
+
+                            // Calculate metrics: Unique classes count and Top detection (highest confidence)
+                            const uniqueClassesCount = new Set(data.objects.map(o => o.name)).size;
+                            
+                            let topObj = null;
+                            let maxConf = 0;
+                            data.objects.forEach(o => {
+                                if (o.confidence > maxConf) {
+                                    maxConf = o.confidence;
+                                    topObj = o;
+                                }
+                            });
+                            
+                            const topDetectionText = topObj ? `${topObj.name.charAt(0).toUpperCase() + topObj.name.slice(1)} (${Math.round(topObj.confidence * 100)}%)` : "-";
+                            
+                            // Update Summary values
+                            document.getElementById('image-summary-count').textContent = uniqueClassesCount;
+                            document.getElementById('image-summary-top').textContent = topDetectionText;
+                            document.getElementById('image-summary-time').textContent = processingTimeText;
+                            
+                            // Reveal Summary
+                            if (imageSummarySection) {
+                                imageSummarySection.classList.remove('hidden');
+                            }
+                        }
+                    } else {
+                        if (statusBadge) {
+                            statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-500/10 text-red-400 rounded-[4px] border border-red-500/20";
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>Error`;
+                        }
+                        showGlobalAlert(data.error || "Detection failed.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    detectBtn.disabled = false;
+                    detectBtn.innerHTML = `<svg data-feather="search" class="w-4 h-4 mr-2 inline"></svg>Detect Objects`;
+                    feather.replace();
+                    if (statusBadge) {
+                        statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-500/10 text-red-400 rounded-[4px] border border-red-500/20";
+                        statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>Error`;
+                    }
+                    showGlobalAlert("An error occurred while detecting objects.");
+                }
+            });
+
+            // ================= VIDEO DETECTION HANDLER =================
+
+            const videoPreview = document.getElementById('video-preview');
+            const videoUploadInput = document.getElementById('video-upload-input');
+            const vdetectBtn = document.getElementById('detect-video-btn');
+            const videoResultsPanel = document.getElementById('video-results-panel');
+            const videoResultFrame = document.getElementById('video-result-frame');
+            const videoUploadArea = document.getElementById('video-upload-area');
+            const changeVideoBtn = document.getElementById('change-video-btn');
+            const videoSummarySection = document.getElementById('video-summary-section');
+            const toggleVideoViewBtn = document.getElementById('toggle-video-view-btn');
+
+            let uploadedVideo = null;
+            let videoIntervalId = null;
+            let videoAccumulatedObjects = {}; // Aggregates object name -> highest confidence seen so far
+            
+            // Telemetry & Future Extensibility Cache Object
+            let videoSessionData = {
+                objects: {}, // Map of name -> count
+                uniqueClasses: 0,
+                topObject: null,
+                processingTime: 0
+            };
+
+            // Load preview
+            videoUploadInput.addEventListener('change', async () => {
+                if (videoUploadInput.files && videoUploadInput.files[0]) {
+                    uploadedVideo = videoUploadInput.files[0];
+                    videoPreview.src = URL.createObjectURL(uploadedVideo);
+                    
+                    // Show video player, hide annotated result frame
+                    videoPreview.classList.remove('hidden');
+                    if (videoResultFrame) {
+                        videoResultFrame.classList.add('hidden');
+                        videoResultFrame.src = '';
+                    }
+                    if (toggleVideoViewBtn) {
+                        toggleVideoViewBtn.classList.add('hidden');
+                    }
+                    
+                    document.getElementById('video-placeholder').style.display = 'none';
+                    videoPreview.load();
+                    
+                    // Refine dropzone borders when video is loaded
+                    if (videoUploadArea) {
+                        videoUploadArea.classList.remove('border-2', 'border-dashed', 'border-text-muted/30');
+                        videoUploadArea.classList.add('border', 'border-white/[0.06]');
+                    }
+                    
+                    // Show change button
+                    if (changeVideoBtn) {
+                        changeVideoBtn.classList.remove('hidden');
+                    }
+
+                    // Hide summary section and reset accumulated tracking
+                    if (videoSummarySection) {
+                        videoSummarySection.classList.add('hidden');
+                    }
+                    videoAccumulatedObjects = {};
+                    
+                    const statusBadge = document.getElementById('video-status-badge');
+                    if (statusBadge) {
+                        statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-blue-500/10 text-blue-400 rounded-[4px] border border-blue-500/20";
+                        statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-blue-500 rounded-full mr-1.5"></span>Ready for Detection`;
+                    }
+                    
+                    videoResultsPanel.className = "text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                    videoResultsPanel.innerHTML = `
+                        <svg data-feather="video" class="w-8 h-8 mb-2 text-accent-blue/60"></svg>
+                        <p class="font-semibold text-text-light text-base">Uploading Video...</p>
+                        <p class="text-sm text-text-muted max-w-[200px] mt-1">Please wait while the file is prepared on the server.</p>`;
+                    feather.replace();
+
+                    // Upload file to server immediately to minimize latency during detection launch
+                    const formData = new FormData();
+                    formData.append('video', uploadedVideo);
+                    try {
+                        const res = await fetch('/upload_video', { method: 'POST', body: formData });
+                        const data = await res.json();
+                        if (data.success) {
+                            videoResultsPanel.innerHTML = `
+                                <svg data-feather="video" class="w-8 h-8 mb-2 text-accent-blue/60"></svg>
+                                <p class="font-semibold text-text-light text-base">Video Loaded</p>
+                                <p class="text-sm text-text-muted max-w-[200px] mt-1">Ready for analysis. Click "Detect Objects" to start.</p>`;
+                        } else {
+                            showGlobalAlert("Upload failed: " + data.error);
+                            videoResultsPanel.innerHTML = `<p style="color:red; text-align: center; padding: 20px;">Upload failed: ${data.error}</p>`;
+                        }
+                    } catch (err) {
+                        console.error("Upload error:", err);
+                        videoResultsPanel.innerHTML = `<p style="color:red; text-align: center; padding: 20px;">Connection error uploading video.</p>`;
+                    }
+                    feather.replace();
+                }
+            });
+
+            // Bind change video button trigger
+            if (changeVideoBtn) {
+                changeVideoBtn.addEventListener('click', async () => {
+                    if (videoIntervalId) {
+                        clearInterval(videoIntervalId);
+                        videoIntervalId = null;
+                    }
+                    // Terminate active scanner thread if running
+                    await fetch('/stop_video_detection', { method: 'POST' });
+                    
+                    if (toggleVideoViewBtn) {
+                        toggleVideoViewBtn.classList.add('hidden');
+                    }
+                    videoUploadInput.value = ''; // Reset input value to ensure re-selecting the same file fires change event
+                    videoAccumulatedObjects = {};
+                    videoUploadInput.click();
+                });
+            }
+
+            // Detect
+            vdetectBtn.addEventListener('click', async () => {
+                if (!uploadedVideo) {
+                    showGlobalAlert("Please select a video first!");
+                    return;
+                }
+
+                if (toggleVideoViewBtn) {
+                    toggleVideoViewBtn.classList.add('hidden');
+                }
+
+                vdetectBtn.disabled = true;
+                vdetectBtn.innerHTML = `
+                    <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-background-dark inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Detecting...`;
+
+                const statusBadge = document.getElementById('video-status-badge');
+                if (statusBadge) {
+                    statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-yellow-500/10 text-yellow-500 rounded-[4px] border border-yellow-500/20";
+                    statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-yellow-500 rounded-full mr-1.5 animate-pulse"></span>Processing`;
+                }
+
+                // Hide summary section and reset accumulated tracking
+                if (videoSummarySection) {
+                    videoSummarySection.classList.add('hidden');
+                }
+                videoAccumulatedObjects = {};
+
+                videoResultsPanel.className = "text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                videoResultsPanel.innerHTML = '<p class="text-text-muted text-center py-6">Initializing video stream...</p>';
+
+                const formData = new FormData();
+                formData.append('mode', 'fast'); // Support extensible Fast/Full modes, defaulting to optimized Fast (sampled frames)
+
+                try {
+                    const res = await fetch('/start_video_detection', { method: 'POST', body: formData });
+                    const startData = await res.json();
+
+                    if (!startData.success) {
+                        throw new Error(startData.error || "Failed to start processing.");
+                    }
+
+                    // Swap preview player to live MJPEG stream
+                    videoPreview.classList.add('hidden');
+                    if (videoResultFrame) {
+                        videoResultFrame.src = "/video_detection_feed?t=" + Date.now();
+                        videoResultFrame.classList.remove('hidden');
+                    }
+
+                    // Client-side response timing start
+                    const startFetchTime = Date.now();
+
+                    // Start progress/telemetry polling
+                    if (videoIntervalId) {
+                        clearInterval(videoIntervalId);
+                    }
+
+                    videoIntervalId = setInterval(async () => {
+                        try {
+                            const dataRes = await fetch('/video_detection_data');
+                            const data = await dataRes.json();
+
+                            if (data.status === "processing") {
+                                // Update status badge with percentage
+                                if (statusBadge) {
+                                    statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-yellow-500 rounded-full mr-1.5 animate-pulse"></span>Processing (${data.progress_percent}%)`;
+                                }
+
+                                // Update progressive list with frame detections
+                                if (data.objects && data.objects.length > 0) {
+                                    data.objects.forEach(obj => {
+                                        if (!videoAccumulatedObjects[obj.name] || obj.confidence > videoAccumulatedObjects[obj.name]) {
+                                            videoAccumulatedObjects[obj.name] = obj.confidence;
+                                        }
+                                    });
+                                }
+
+                                // Update viewport stats layout
+                                videoResultsPanel.className = "text-text-light text-lg space-y-2";
+                                videoResultsPanel.innerHTML = `
+                                    <div class="text-xs text-text-muted mb-2 text-center">
+                                        Frame ${data.current_frame} / ${data.total_frames} (${data.progress_percent}%)
+                                    </div>`;
+
+                                // Render the progressive accumulated list
+                                const accumulatedEntries = Object.entries(videoAccumulatedObjects);
+                                if (accumulatedEntries.length > 0) {
+                                    accumulatedEntries.forEach(([name, confidence]) => {
+                                        const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+                                        videoResultsPanel.innerHTML += `
+                                            <div class="flex justify-between items-start border-b border-text-muted/10 pb-2">
+                                                <span class="font-semibold text-text-light text-base pr-2 break-words whitespace-normal">${formattedName}</span>
+                                                <span class="flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-[4px] bg-accent-blue/30 text-accent-blue">${Math.round(confidence * 100)}%</span>
+                                            </div>`;
+                                    });
+                                } else {
+                                    videoResultsPanel.innerHTML += `<p class="text-text-muted text-center text-sm py-4">Scanning frame... No items</p>`;
+                                }
+                            }
+                            else if (data.status === "completed") {
+                                clearInterval(videoIntervalId);
+                                videoIntervalId = null;
+
+                                // Client-side response timing end
+                                const processingTimeMs = Date.now() - startFetchTime;
+                                const processingTimeText = `${(processingTimeMs / 1000).toFixed(2)}s`;
+
+                                vdetectBtn.disabled = false;
+                                vdetectBtn.innerHTML = `<svg data-feather="search" class="w-4 h-4 mr-2 inline"></svg>Detect Objects`;
+                                feather.replace();
+
+                                // Update status to Complete
+                                if (statusBadge) {
+                                    statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-500/10 text-green-400 rounded-[4px] border border-green-500/20";
+                                    statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5"></span>Complete`;
+                                }
+
+                                // Populate telemetry structured cache
+                                videoSessionData.objects = {};
+                                if (data.summary && data.summary.objects) {
+                                    data.summary.objects.forEach(obj => {
+                                        videoSessionData.objects[obj.name] = obj.count;
+                                    });
+                                }
+                                videoSessionData.uniqueClasses = data.summary ? data.summary.unique_count : 0;
+                                videoSessionData.topObject = (data.summary && data.summary.top_object) ? { name: data.summary.top_object, count: data.summary.top_count } : null;
+                                videoSessionData.processingTime = processingTimeText;
+                                 // Show final static annotated frame in result viewport to terminate MJPEG socket cleanly
+                                 if (data.frame && videoResultFrame) {
+                                     videoResultFrame.src = `data:image/jpeg;base64,${data.frame}`;
+                                 }
+                                 if (videoResultFrame) {
+                                     videoResultFrame.classList.remove('hidden');
+                                 }
+                                 if (videoPreview) {
+                                     videoPreview.classList.add('hidden');
+                                 }
+                                 if (toggleVideoViewBtn) {
+                                     toggleVideoViewBtn.classList.remove('hidden');
+                                     toggleVideoViewBtn.textContent = 'View Original Video';
+                                 }
+
+                                // Render accumulated summary object list in panel
+                                videoResultsPanel.innerHTML = '';
+                                if (videoSessionData.uniqueClasses === 0) {
+                                    videoResultsPanel.className = "text-text-light text-lg space-y-2 h-full flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                                    videoResultsPanel.innerHTML = `
+                                        <svg data-feather="slash" class="w-8 h-8 mb-2 text-text-muted/40"></svg>
+                                        <p class="font-semibold text-text-light">No Objects Detected</p>
+                                        <p class="text-sm text-text-muted max-w-[200px] mt-1">No items found in video.</p>`;
+                                    feather.replace();
+                                } else {
+                                    videoResultsPanel.className = "space-y-2 text-lg text-text-light";
+                                    Object.entries(videoSessionData.objects).forEach(([name, count]) => {
+                                        const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+                                        videoResultsPanel.innerHTML += `
+                                            <div class="flex justify-between items-start border-b border-text-muted/10 pb-2">
+                                                <span class="font-semibold text-text-light text-base pr-2 break-words whitespace-normal">${formattedName}</span>
+                                                <span class="flex-shrink-0 px-2 py-0.5 text-xs font-semibold rounded-[4px] bg-accent-blue/30 text-accent-blue">${count}x</span>
+                                            </div>`;
+                                    });
+
+                                    // Update HTML summary card metrics
+                                    const topObjText = videoSessionData.topObject ? `${videoSessionData.topObject.name.charAt(0).toUpperCase() + videoSessionData.topObject.name.slice(1)} (${videoSessionData.topObject.count}x)` : "-";
+                                    document.getElementById('video-summary-count').textContent = videoSessionData.uniqueClasses;
+                                    document.getElementById('video-summary-top').textContent = topObjText;
+                                    document.getElementById('video-summary-time').textContent = videoSessionData.processingTime;
+
+                                    // Reveal summary section
+                                    if (videoSummarySection) {
+                                        videoSummarySection.classList.remove('hidden');
+                                    }
+                                }
+                            }
+                            else if (data.status === "error") {
+                                throw new Error("Backend processing encountered an error");
+                            }
+
+                        } catch (err) {
+                            console.error("Polling error:", err);
+                            clearInterval(videoIntervalId);
+                            videoIntervalId = null;
+                            
+                            vdetectBtn.disabled = false;
+                            vdetectBtn.innerHTML = `<svg data-feather="search" class="w-4 h-4 mr-2 inline"></svg>Detect Objects`;
+                            feather.replace();
+
+                            if (statusBadge) {
+                                statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-500/10 text-red-400 rounded-[4px] border border-red-500/20";
+                                statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>Error`;
+                            }
+                            videoResultsPanel.innerHTML = `<p style="color:red; text-align: center; padding: 20px;">Error processing video: ${err.message}</p>`;
+                        }
+                    }, 250);
+
+                } catch (err) {
+                    console.error("Detection error:", err);
+                    vdetectBtn.disabled = false;
+                    vdetectBtn.innerHTML = `<svg data-feather="search" class="w-4 h-4 mr-2 inline"></svg>Detect Objects`;
+                    feather.replace();
+
+                    if (statusBadge) {
+                        statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-500/10 text-red-400 rounded-[4px] border border-red-500/20";
+                        statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></span>Error`;
+                    }
+                    videoResultsPanel.innerHTML = `<p style="color:red; text-align: center; padding: 20px;">Initialization error: ${err.message}</p>`;
+                }
+            });
+
+            if (toggleVideoViewBtn) {
+                toggleVideoViewBtn.addEventListener('click', () => {
+                    if (videoPreview.classList.contains('hidden')) {
+                        videoPreview.classList.remove('hidden');
+                        videoResultFrame.classList.add('hidden');
+                        toggleVideoViewBtn.textContent = 'View Scan Result';
+                    } else {
+                        videoPreview.classList.add('hidden');
+                        videoResultFrame.classList.remove('hidden');
+                        toggleVideoViewBtn.textContent = 'View Original Video';
+                    }
+                });
+            }
+
+            // ================= OBJECT SEARCH CONTROLLER =================
+
+            const searchInput = document.getElementById('search-query-input');
+            const searchSubmitBtn = document.getElementById('search-submit-btn');
+            const searchPresetChips = document.querySelectorAll('.search-preset-chip');
+            const searchTabButtons = document.querySelectorAll('.search-tab-btn');
+
+            const searchWebcamViewport = document.getElementById('search-webcam-viewport');
+            const searchImageViewport = document.getElementById('search-image-viewport');
+            const searchVideoViewport = document.getElementById('search-video-viewport');
+
+            const searchWebcamFeed = document.getElementById('search-webcam-feed');
+            const searchWebcamStandby = document.getElementById('search-webcam-standby');
+            
+            // Replaced by searchExecuteBtn in workstation
+            const searchExecuteBtn = document.getElementById('viewport-search-btn');
+            const searchBrowseToggleBtn = document.getElementById('search-browse-toggle-btn');
+            const supportedObjectsBrowser = document.getElementById('supported-objects-browser');
+            const supportedObjectsCategoriesContainer = document.getElementById('supported-objects-categories-container');
+            const searchAutocompleteDropdown = document.getElementById('search-autocomplete-dropdown');
+ 
+            const searchImageUploadArea = document.getElementById('search-image-upload-area');
+            const searchImageCanvas = document.getElementById('search-image-canvas');
+            const searchImagePlaceholder = document.getElementById('search-image-placeholder');
+            const searchImageInput = document.getElementById('search-image-input');
+            
+            // Replaced by searchExecuteBtn, but kept dummy references for compatibility
+            const searchImageDetectBtn = document.createElement('button');
+            const searchImageChangeBtn = document.getElementById('search-image-change-btn');
+ 
+            const searchVideoUploadArea = document.getElementById('search-video-upload-area');
+            const searchVideoPreview = document.getElementById('search-video-preview');
+            const searchVideoResultFrame = document.getElementById('search-video-result-frame');
+            const searchToggleVideoViewBtn = document.getElementById('search-toggle-video-view-btn');
+            const searchVideoPlaceholder = document.getElementById('search-video-placeholder');
+            const searchVideoInput = document.getElementById('search-video-input');
+            
+            // Replaced by searchExecuteBtn
+            const searchVideoDetectBtn = document.createElement('button');
+            const searchVideoChangeBtn = document.getElementById('search-video-change-btn');
+ 
+            const searchConfidenceSlider = document.getElementById('search-confidence-slider');
+            const searchConfidenceBadge = document.getElementById('search-confidence-badge');
+
+            // Telemetry Elements
+            const searchStatusBadge = document.getElementById('search-status-badge');
+            const statusBadgeText = document.getElementById('status-badge-text');
+            const statusIndicatorDot = document.getElementById('status-indicator-dot');
+            const telemetryTargetsList = document.getElementById('telemetry-targets-list');
+            const telemetryMatchesVal = document.getElementById('telemetry-matches-val');
+            const telemetryConfidenceVal = document.getElementById('telemetry-confidence-val');
+            const telemetryDurationVal = document.getElementById('telemetry-duration-val');
+            const telemetryLatestVal = document.getElementById('telemetry-latest-val');
+            const searchTargetsCount = document.getElementById('search-targets-count');
+            const searchTelemetryGuidance = document.getElementById('search-telemetry-guidance');
+            const searchTelemetryMetrics = document.getElementById('search-telemetry-metrics');
+
+            // Findings Report Elements
+            const searchFindingsReport = document.getElementById('search-findings-report');
+            const searchClearFindingsBtn = document.getElementById('search-clear-findings-btn');
+            const findingsStatusBadge = document.getElementById('findings-status-badge');
+            const findingsQueryTargets = document.getElementById('findings-query-targets');
+            const findingsTotalMatches = document.getElementById('findings-total-matches');
+            const findingsMaxConfidence = document.getElementById('findings-max-confidence');
+            const findingsDuration = document.getElementById('findings-duration');
+            const findingsObjectsTbody = document.getElementById('findings-objects-tbody');
+            const findingsSearchId = document.getElementById('findings-search-id');
+            const findingsSource = document.getElementById('findings-source');
+            const findingsStatusText = document.getElementById('findings-status-text');
+
+            // Source Switch Modal Elements
+            const sourceSwitchModal = document.getElementById('source-switch-modal');
+            const sourceSwitchCancel = document.getElementById('source-switch-cancel');
+            const sourceSwitchContinue = document.getElementById('source-switch-continue');
+
+            // Replaced results panel text dummies
+            const searchResultsPanel = document.createElement('div');
+            const searchSummarySection = document.createElement('div');
+
+            let currentSearchSource = 'webcam';
+            let searchWebcamActive = false;
+            let searchWebcamIntervalId = null;
+            let searchUploadedImage = null;
+            let searchUploadedVideo = null;
+            let searchVideoIntervalId = null;
+            
+            // Client state
+            let searchTags = [];
+            let cachedDetections = null;
+            let cachedImageObj = null;
+            let cachedWidth = 0;
+            let cachedHeight = 0;
+            let searchStartTime = null;
+            let pendingSourceSwitch = null;
+            let currentSearchId = "";
+
+            // Live Telemetry Session variables
+            let searchSessionTimerId = null;
+            let searchSessionDurationSeconds = 0;
+            let searchSessionMaxConfidence = 0;
+            let searchSessionTotalMatches = 0;
+            let searchSessionOccurrences = {}; // class name -> { peakCount: X, maxConfidence: Y }
+            let searchSessionLatestDetection = "-";
+
+            let searchWebcamActivating = false;
+            let searchVideoActivating = false;
+
+            // Define YOLO classes and categories
+            const CLASS_CATEGORIES = {
+                "People": ["person"],
+                "Vehicles": ["car", "bus", "truck", "motorcycle", "bicycle"],
+                "Animals": ["dog", "cat", "horse", "sheep", "cow", "bird"],
+                "Electronics": ["laptop", "cell phone", "tv", "mouse", "keyboard"],
+                "Household": ["chair", "couch", "bed", "dining table", "bottle", "cup"]
+            };
+
+            const PRIMARY_CATEGORIES_CLASSES = Object.values(CLASS_CATEGORIES).flat();
+            const ALL_YOLO_CLASSES_LIST = [
+                "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
+                "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat",
+                "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack",
+                "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball",
+                "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket",
+                "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+                "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair",
+                "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+                "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator",
+                "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+            ];
+            CLASS_CATEGORIES["Others"] = ALL_YOLO_CLASSES_LIST.filter(cls => !PRIMARY_CATEGORIES_CLASSES.includes(cls));
+
+            const ALL_YOLO_CLASSES = Object.values(CLASS_CATEGORIES).flat();
+
+            function generateSearchId() {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const rand = String(Math.floor(1000 + Math.random() * 9000));
+                return `SRCH-${year}${month}${day}-${rand}`;
+            }
+
+            let activeAutocompleteIndex = -1;
+            let filteredAutocompleteClasses = [];
+
+            // UI Locking helper during activation
+            function setSearchUILocked(locked) {
+                // Disable/enable tabs
+                searchTabButtons.forEach(btn => {
+                    btn.disabled = locked;
+                    if (locked) {
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                });
+
+                // Disable/enable preset chips
+                searchPresetChips.forEach(chip => {
+                    chip.disabled = locked;
+                    if (locked) {
+                        chip.classList.add('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        chip.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                });
+
+                if (searchExecuteBtn) {
+                    // We don't disable searchExecuteBtn while active to allow stopping
+                    if (locked && !isSearchRunning()) {
+                        searchExecuteBtn.disabled = true;
+                        searchExecuteBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        searchExecuteBtn.disabled = false;
+                        searchExecuteBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                }
+                if (searchVideoChangeBtn) {
+                    searchVideoChangeBtn.disabled = locked;
+                    if (locked) searchVideoChangeBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    else searchVideoChangeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+                if (searchImageChangeBtn) {
+                    searchImageChangeBtn.disabled = locked;
+                    if (locked) searchImageChangeBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    else searchImageChangeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+                if (searchBrowseToggleBtn) {
+                    searchBrowseToggleBtn.disabled = locked;
+                    if (locked) searchBrowseToggleBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    else searchBrowseToggleBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+                if (searchSubmitBtn) {
+                    searchSubmitBtn.disabled = locked;
+                    if (locked) searchSubmitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    else searchSubmitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            }
+
+            // Status Badge Renderer
+            function updateSearchStatus(status) {
+                if (!statusBadgeText) return;
+                statusBadgeText.textContent = status;
+                
+                // Color mapping
+                let badgeClass = "inline-flex items-center px-3 py-1 rounded-[4px] text-xs font-bold transition-all ";
+                let dotClass = "w-1.5 h-1.5 rounded-full mr-1.5 ";
+                
+                if (status === 'No Query' || status === 'Ready') {
+                    badgeClass += "bg-white/5 text-text-muted border border-white/[0.06]";
+                    dotClass += "bg-neutral-400";
+                } else if (status === 'Ready to Search' || status === 'Image Loaded' || status === 'Video Loaded') {
+                    badgeClass += "bg-blue-500/10 text-blue-400 border border-blue-500/20";
+                    dotClass += "bg-blue-400";
+                } else if (status === 'Searching' || status.startsWith('Searching') || status === 'Uploading') {
+                    badgeClass += "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20";
+                    dotClass += "bg-yellow-500 animate-pulse";
+                } else if (status === 'Found' || status.startsWith('Found')) {
+                    badgeClass += "bg-green-500/10 text-green-400 border border-green-500/20";
+                    dotClass += "bg-green-500";
+                } else if (status === 'Not Found') {
+                    badgeClass += "bg-red-500/10 text-red-400 border border-red-500/20";
+                    dotClass += "bg-red-500";
+                } else if (status === 'Completed') {
+                    badgeClass += "bg-green-500/10 text-green-400 border border-green-500/20";
+                    dotClass += "bg-green-500";
+                } else if (status === 'Error') {
+                    badgeClass += "bg-red-500/10 text-red-400 border border-red-500/20";
+                    dotClass += "bg-red-500";
+                }
+                
+                if (searchStatusBadge) searchStatusBadge.className = badgeClass;
+                if (statusIndicatorDot) statusIndicatorDot.className = dotClass;
+            }
+
+            // Tag/Chip Management
+            function renderSearchTags() {
+                const container = document.getElementById('search-tags-container');
+                if (!container) return;
+                container.innerHTML = '';
+                searchTags.forEach((tag, index) => {
+                    const chip = document.createElement('div');
+                    chip.className = "inline-flex items-center space-x-1.5 bg-accent-blue/20 text-accent-blue px-2.5 py-1 rounded-[4px] border border-accent-blue/30 text-sm font-medium animate-fade-in";
+                    chip.innerHTML = `
+                        <span>${tag}</span>
+                        <button type="button" class="hover:text-text-light transition focus:outline-none" onclick="removeSearchTag(${index})">×</button>
+                    `;
+                    container.appendChild(chip);
+                });
+
+                const targetsHelper = document.getElementById('search-targets-helper');
+                if (targetsHelper) {
+                    targetsHelper.innerHTML = `${searchTags.length} Target${searchTags.length === 1 ? '' : 's'} Selected`;
+                }
+
+                if (telemetryTargetsList) {
+                    telemetryTargetsList.textContent = searchTags.length > 0 ? searchTags.join(', ') : '-';
+                }
+
+                // Update preset chips styling
+                searchPresetChips.forEach(chip => {
+                    const val = chip.getAttribute('data-val');
+                    if (searchTags.includes(val)) {
+                        chip.className = "search-preset-chip px-3 py-1.5 text-xs bg-accent-blue/20 text-accent-blue rounded-full border border-accent-blue/30 transition";
+                    } else {
+                        chip.className = "search-preset-chip px-3 py-1.5 text-xs bg-white/5 hover:bg-white/10 text-text-muted hover:text-text-light rounded-full border border-white/[0.06] transition";
+                    }
+                });
+
+                syncBrowserCheckboxes();
+                updateBackendSearchQuery();
+            }
+
+            function addSearchTag(tag) {
+                tag = tag.trim().toLowerCase();
+                if (!tag) return;
+                if (!searchTags.includes(tag)) {
+                    searchTags.push(tag);
+                    renderSearchTags();
+                    if (currentSearchSource === 'image' && cachedDetections) {
+                        drawFilteredImageOnCanvas();
+                    } else {
+                        updateSearchStatus('Ready to Search');
+                    }
+                }
+            }
+
+            window.removeSearchTag = function(index) {
+                searchTags.splice(index, 1);
+                renderSearchTags();
+                if (currentSearchSource === 'image' && cachedDetections) {
+                    drawFilteredImageOnCanvas();
+                } else if (searchTags.length === 0) {
+                    resetSearchResultsPanel(currentSearchSource);
+                }
+            };
+
+            // Dynamically categories check list populator
+            function renderCategoryBrowser() {
+                if (!supportedObjectsCategoriesContainer) return;
+                supportedObjectsCategoriesContainer.innerHTML = '';
+                for (const [categoryName, classes] of Object.entries(CLASS_CATEGORIES)) {
+                    const catDiv = document.createElement('div');
+                    catDiv.className = "bg-background-dark/40 border border-white/[0.04] p-3 rounded-[8px] space-y-2 flex flex-col h-[280px]";
+                    
+                    const title = document.createElement('h4');
+                    title.className = "text-[11px] font-bold text-accent-blue uppercase tracking-wider border-b border-white/[0.04] pb-1.5 flex-shrink-0";
+                    title.textContent = categoryName;
+                    catDiv.appendChild(title);
+                    
+                    const listDiv = document.createElement('div');
+                    listDiv.className = "space-y-1.5 overflow-y-auto pr-1 flex-grow scrollbar-thin";
+                    
+                    classes.forEach(cls => {
+                        const label = document.createElement('label');
+                        label.className = "flex items-center text-xs text-text-muted hover:text-text-light cursor-pointer select-none py-0.5 transition-colors";
+                        
+                        const checkbox = document.createElement('input');
+                        checkbox.type = "checkbox";
+                        checkbox.className = "category-class-checkbox rounded bg-background-dark/50 border-white/10 text-accent-blue focus:ring-accent-blue mr-2 h-3.5 w-3.5 transition-colors";
+                        checkbox.setAttribute('data-val', cls);
+                        
+                        checkbox.addEventListener('change', (e) => {
+                            if (checkbox.disabled) return;
+                            if (e.target.checked) {
+                                addSearchTag(cls);
+                            } else {
+                                const idx = searchTags.indexOf(cls);
+                                if (idx !== -1) {
+                                    removeSearchTag(idx);
+                                }
+                            }
+                        });
+                        
+                        label.appendChild(checkbox);
+                        label.appendChild(document.createTextNode(cls.charAt(0).toUpperCase() + cls.slice(1)));
+                        listDiv.appendChild(label);
+                    });
+                    
+                    catDiv.appendChild(listDiv);
+                    supportedObjectsCategoriesContainer.appendChild(catDiv);
+                }
+            }
+
+            function syncBrowserCheckboxes() {
+                const checkboxes = document.querySelectorAll('.category-class-checkbox');
+                checkboxes.forEach(cb => {
+                    const val = cb.getAttribute('data-val');
+                    cb.checked = searchTags.includes(val);
+                });
+            }
+
+            // Autocomplete rendering logic
+            function renderAutocomplete(query) {
+                query = query.trim().toLowerCase();
+                if (!query) {
+                    hideAutocomplete();
+                    return;
+                }
+
+                const matches = ALL_YOLO_CLASSES.filter(cls => {
+                    return !searchTags.includes(cls) && cls.includes(query);
+                });
+
+                matches.sort((a, b) => {
+                    const aStart = a.startsWith(query);
+                    const bStart = b.startsWith(query);
+                    if (aStart && !bStart) return -1;
+                    if (!aStart && bStart) return 1;
+                    return a.localeCompare(b);
+                });
+
+                filteredAutocompleteClasses = matches.slice(0, 8);
+                activeAutocompleteIndex = -1;
+
+                if (filteredAutocompleteClasses.length === 0) {
+                    hideAutocomplete();
+                    return;
+                }
+
+                if (searchAutocompleteDropdown) {
+                    searchAutocompleteDropdown.innerHTML = '';
+                    filteredAutocompleteClasses.forEach((cls, idx) => {
+                        const item = document.createElement('div');
+                        item.className = "autocomplete-item px-3 py-2 text-sm text-text-light hover:bg-accent-blue/20 hover:text-white cursor-pointer transition-colors duration-150";
+                        item.textContent = cls.charAt(0).toUpperCase() + cls.slice(1);
+                        item.setAttribute('data-index', idx);
+                        item.setAttribute('data-val', cls);
+                        
+                        item.addEventListener('click', () => {
+                            addSearchTag(cls);
+                            searchInput.value = '';
+                            hideAutocomplete();
+                            searchInput.focus();
+                        });
+
+                        searchAutocompleteDropdown.appendChild(item);
+                    });
+                    searchAutocompleteDropdown.classList.remove('hidden');
+                }
+            }
+
+            function hideAutocomplete() {
+                if (searchAutocompleteDropdown) {
+                    searchAutocompleteDropdown.classList.add('hidden');
+                    searchAutocompleteDropdown.innerHTML = '';
+                }
+                activeAutocompleteIndex = -1;
+                filteredAutocompleteClasses = [];
+            }
+
+            function highlightAutocompleteItem() {
+                if (!searchAutocompleteDropdown) return;
+                const items = searchAutocompleteDropdown.querySelectorAll('.autocomplete-item');
+                items.forEach((item, idx) => {
+                    if (idx === activeAutocompleteIndex) {
+                        item.classList.add('bg-accent-blue/30', 'text-white');
+                        item.scrollIntoView({ block: 'nearest' });
+                    } else {
+                        item.classList.remove('bg-accent-blue/30', 'text-white');
+                    }
+                });
+            }
+
+            // Keyboard navigation on autocomplete query input
+            searchInput.addEventListener('input', (e) => {
+                renderAutocomplete(e.target.value);
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowDown') {
+                    if (filteredAutocompleteClasses.length > 0) {
+                        e.preventDefault();
+                        activeAutocompleteIndex = (activeAutocompleteIndex + 1) % filteredAutocompleteClasses.length;
+                        highlightAutocompleteItem();
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    if (filteredAutocompleteClasses.length > 0) {
+                        e.preventDefault();
+                        activeAutocompleteIndex = (activeAutocompleteIndex - 1 + filteredAutocompleteClasses.length) % filteredAutocompleteClasses.length;
+                        highlightAutocompleteItem();
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (activeAutocompleteIndex >= 0 && filteredAutocompleteClasses.length > 0) {
+                        const selectedClass = filteredAutocompleteClasses[activeAutocompleteIndex];
+                        addSearchTag(selectedClass);
+                        searchInput.value = '';
+                        hideAutocomplete();
+                    } else {
+                        const val = searchInput.value.replace(/,/g, '').trim();
+                        if (val) {
+                            addSearchTag(val);
+                            searchInput.value = '';
+                            hideAutocomplete();
+                        } else {
+                            toggleSearchExecution();
+                        }
+                    }
+                } else if (e.key === 'Escape') {
+                    hideAutocomplete();
+                } else if (e.key === ',') {
+                    e.preventDefault();
+                    const val = searchInput.value.replace(/,/g, '').trim();
+                    if (val) {
+                        addSearchTag(val);
+                        searchInput.value = '';
+                        hideAutocomplete();
+                    }
+                }
+            });
+
+            searchInput.addEventListener('blur', () => {
+                setTimeout(() => {
+                    const val = searchInput.value.replace(/,/g, '').trim();
+                    if (val) {
+                        addSearchTag(val);
+                        searchInput.value = '';
+                    }
+                    hideAutocomplete();
+                }, 200);
+            });
+
+            // Hide autocomplete dropdown on click outside
+            window.addEventListener('click', (e) => {
+                if (searchAutocompleteDropdown && !searchAutocompleteDropdown.contains(e.target) && e.target !== searchInput) {
+                    hideAutocomplete();
+                }
+            });
+
+            searchPresetChips.forEach(chip => {
+                chip.addEventListener('click', () => {
+                    if (chip.disabled) return;
+                    const val = chip.getAttribute('data-val');
+                    addSearchTag(val);
+                });
+            });
+
+            if (searchBrowseToggleBtn) {
+                searchBrowseToggleBtn.addEventListener('click', () => {
+                    if (searchBrowseToggleBtn.disabled) return;
+                    if (supportedObjectsBrowser) {
+                        supportedObjectsBrowser.classList.toggle('hidden');
+                        const isHidden = supportedObjectsBrowser.classList.contains('hidden');
+                        searchBrowseToggleBtn.innerHTML = isHidden ? 
+                            `<i data-feather="grid" class="w-3.5 h-3.5 mr-1.5"></i><span>Browse Objects</span>` :
+                            `<i data-feather="chevron-up" class="w-3.5 h-3.5 mr-1.5"></i><span>Close Catalog</span>`;
+                        
+                        if (isHidden) {
+                            searchBrowseToggleBtn.className = "px-4 py-2.5 bg-accent-blue hover:bg-accent-blue/90 border border-transparent text-background-dark rounded-[6px] text-xs font-bold transition flex items-center shadow-md transform hover:scale-[1.02] active:scale-[0.98]";
+                        } else {
+                            searchBrowseToggleBtn.className = "px-4 py-2.5 bg-white/10 hover:bg-white/15 border border-white/10 text-text-light rounded-[6px] text-xs font-bold transition flex items-center shadow-md transform hover:scale-[1.02] active:scale-[0.98]";
+                        }
+                        feather.replace();
+                    }
+                });
+            }
+
+            if (searchSubmitBtn) {
+                searchSubmitBtn.addEventListener('click', () => {
+                    if (searchSubmitBtn.disabled) return;
+                    const val = searchInput.value.trim();
+                    if (val) {
+                        addSearchTag(val);
+                        searchInput.value = '';
+                        hideAutocomplete();
+                    }
+                });
+            }
+
+            // Execute button state renderer
+            function setExecuteButtonState(state) {
+                if (!searchExecuteBtn) return;
+                // state can be: 'idle', 'activating', 'active'
+                if (state === 'idle') {
+                    searchExecuteBtn.disabled = false;
+                    if (currentSearchSource === 'webcam') {
+                        searchExecuteBtn.className = "flex items-center justify-center w-52 py-2.5 bg-green-500 text-background-dark rounded-[6px] text-sm font-semibold hover:bg-green-600 transform hover:scale-[1.01] transition-all duration-200 shadow-md animate-fade-in";
+                        searchExecuteBtn.innerHTML = `<i data-feather="play" class="w-4 h-4 mr-2"></i><span>Activate Search</span>`;
+                    } else if (currentSearchSource === 'image') {
+                        searchExecuteBtn.className = "flex items-center justify-center w-52 py-2.5 bg-accent-blue text-background-dark rounded-[6px] text-sm font-semibold hover:bg-accent-blue/90 transform hover:scale-[1.01] transition-all duration-200 shadow-md animate-fade-in";
+                        searchExecuteBtn.innerHTML = `<i data-feather="search" class="w-4 h-4 mr-2"></i><span>Detect Objects</span>`;
+                    } else if (currentSearchSource === 'video') {
+                        searchExecuteBtn.className = "flex items-center justify-center w-52 py-2.5 bg-accent-blue text-background-dark rounded-[6px] text-sm font-semibold hover:bg-accent-blue/90 transform hover:scale-[1.01] transition-all duration-200 shadow-md animate-fade-in";
+                        searchExecuteBtn.innerHTML = `<i data-feather="search" class="w-4 h-4 mr-2"></i><span>Detect Objects</span>`;
+                    }
+                } else if (state === 'activating') {
+                    searchExecuteBtn.disabled = true;
+                    searchExecuteBtn.className = "flex items-center justify-center w-52 py-2.5 bg-white/10 text-text-muted border border-white/[0.06] rounded-[6px] text-sm font-semibold cursor-not-allowed shadow-md";
+                    searchExecuteBtn.innerHTML = `
+                        <svg class="animate-spin h-4 w-4 text-text-muted mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Connecting...</span>`;
+                } else if (state === 'active') {
+                    searchExecuteBtn.disabled = false;
+                    searchExecuteBtn.className = "flex items-center justify-center w-52 py-2.5 bg-red-500 text-white rounded-[6px] text-sm font-semibold hover:bg-red-600 transform hover:scale-[1.01] transition-all duration-200 shadow-md";
+                    if (currentSearchSource === 'webcam') {
+                        searchExecuteBtn.innerHTML = `<i data-feather="square" class="w-4 h-4 mr-2"></i><span>Stop Search</span>`;
+                    } else if (currentSearchSource === 'video') {
+                        searchExecuteBtn.innerHTML = `<i data-feather="square" class="w-4 h-4 mr-2"></i><span>Stop Processing</span>`;
+                    }
+                }
+                feather.replace();
+            }
+
+            function isSearchRunning() {
+                return searchWebcamActive || searchWebcamActivating || searchVideoIntervalId || searchVideoActivating;
+            }
+
+            async function toggleSearchExecution() {
+                if (searchWebcamActivating || searchVideoActivating) return;
+
+                if (searchTags.length === 0 && searchInput.value.trim()) {
+                    addSearchTag(searchInput.value.trim());
+                    searchInput.value = '';
+                    hideAutocomplete();
+                }
+
+                if (searchTags.length === 0) {
+                    showGlobalAlert("Please enter or select at least one search target first!");
+                    return;
+                }
+
+                if (currentSearchSource === 'webcam') {
+                    if (!searchWebcamActive) {
+                        await startWebcamSearch();
+                    } else {
+                        await stopWebcamSearch();
+                    }
+                } else if (currentSearchSource === 'image') {
+                    if (!searchUploadedImage) {
+                        showGlobalAlert("Please select an image first!");
+                        return;
+                    }
+                    await runImageSearch();
+                } else if (currentSearchSource === 'video') {
+                    if (!searchVideoIntervalId) {
+                        await startVideoSearch();
+                    } else {
+                        await stopVideoSearch();
+                    }
+                }
+            }
+
+            searchExecuteBtn.addEventListener('click', toggleSearchExecution);
+
+            // Confidence Threshold Slider Handler
+            searchConfidenceSlider.addEventListener('input', async () => {
+                const val = searchConfidenceSlider.value;
+                searchConfidenceBadge.textContent = `${val}%`;
+
+                if (currentSearchSource === 'webcam' || currentSearchSource === 'video') {
+                    const threshold = parseFloat(val) / 100;
+                    await fetch(`/update_search_threshold?threshold=${threshold}`);
+                }
+
+                if (currentSearchSource === 'image' && cachedDetections) {
+                    drawFilteredImageOnCanvas();
+                }
+            });
+
+            // Switch tabs helper
+            function executeSourceSwitch(targetSource) {
+                // Graceful stop without deleting findings report or search targets
+                if (searchWebcamActive) {
+                    stopWebcamSearch();
+                } else if (searchVideoIntervalId) {
+                    stopVideoSearch();
+                }
+
+                searchTabButtons.forEach(b => {
+                    if (b.getAttribute('data-source') === targetSource) {
+                        b.className = "search-tab-btn px-5 py-1.5 text-xs font-bold rounded-[4px] transition-all duration-200 flex items-center space-x-1.5 bg-accent-blue text-background-dark shadow-sm";
+                    } else {
+                        b.className = "search-tab-btn px-5 py-1.5 text-xs font-bold rounded-[4px] transition-all duration-200 flex items-center space-x-1.5 text-text-muted hover:text-text-light bg-transparent select-none";
+                    }
+                });
+
+                currentSearchSource = targetSource;
+
+                searchWebcamViewport.classList.add('hidden');
+                searchImageViewport.classList.add('hidden');
+                searchVideoViewport.classList.add('hidden');
+
+                if (searchImageChangeBtn) searchImageChangeBtn.classList.add('hidden');
+                if (searchVideoChangeBtn) searchVideoChangeBtn.classList.add('hidden');
+
+                if (targetSource === 'webcam') {
+                    searchWebcamViewport.classList.remove('hidden');
+                    resetSearchResultsPanel("webcam");
+                } else if (targetSource === 'image') {
+                    searchImageViewport.classList.remove('hidden');
+                    if (searchImageChangeBtn && searchUploadedImage) searchImageChangeBtn.classList.remove('hidden');
+                    resetSearchResultsPanel("image");
+                } else if (targetSource === 'video') {
+                    searchVideoViewport.classList.remove('hidden');
+                    if (searchVideoChangeBtn && searchUploadedVideo) searchVideoChangeBtn.classList.remove('hidden');
+                    resetSearchResultsPanel("video");
+                }
+
+                setExecuteButtonState('idle');
+            }
+
+            // Tab click binding with modal confirmation guard
+            searchTabButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (btn.disabled) return;
+                    const source = btn.getAttribute('data-source');
+                    if (source === currentSearchSource) return;
+
+                    if (isSearchRunning()) {
+                        pendingSourceSwitch = source;
+                        if (sourceSwitchModal) {
+                            sourceSwitchModal.classList.remove('hidden');
+                        }
+                    } else {
+                        executeSourceSwitch(source);
+                    }
+                });
+            });
+
+            if (sourceSwitchCancel) {
+                sourceSwitchCancel.addEventListener('click', () => {
+                    if (sourceSwitchModal) sourceSwitchModal.classList.add('hidden');
+                    pendingSourceSwitch = null;
+                });
+            }
+
+            if (sourceSwitchContinue) {
+                sourceSwitchContinue.addEventListener('click', () => {
+                    if (sourceSwitchModal) sourceSwitchModal.classList.add('hidden');
+                    if (pendingSourceSwitch) {
+                        executeSourceSwitch(pendingSourceSwitch);
+                        pendingSourceSwitch = null;
+                    }
+                });
+            }
+
+            // Clean up running search detections
+            async function stopAllSearchDetections() {
+                searchWebcamActive = false;
+                searchWebcamActivating = false;
+                searchVideoActivating = false;
+                setSearchUILocked(false);
+
+                if (searchWebcamFeed) {
+                    searchWebcamFeed.classList.add('hidden');
+                    searchWebcamFeed.src = '';
+                }
+                if (searchWebcamStandby) {
+                    searchWebcamStandby.classList.remove('hidden');
+                }
+
+                if (searchWebcamIntervalId) {
+                    clearInterval(searchWebcamIntervalId);
+                    searchWebcamIntervalId = null;
+                }
+                if (searchVideoIntervalId) {
+                    clearInterval(searchVideoIntervalId);
+                    searchVideoIntervalId = null;
+                }
+                if (searchSessionTimerId) {
+                    clearInterval(searchSessionTimerId);
+                    searchSessionTimerId = null;
+                }
+
+                setExecuteButtonState('idle');
+
+                await fetch('/stop_webcam');
+                await fetch('/stop_video_detection', { method: 'POST' });
+                feather.replace();
+            }
+
+            // Telemetry Panel Resetter
+            function resetTelemetryPanel() {
+                if (telemetryTargetsList) {
+                    telemetryTargetsList.textContent = searchTags.length > 0 ? searchTags.join(', ') : '-';
+                }
+                if (telemetryMatchesVal) {
+                    telemetryMatchesVal.textContent = '0';
+                }
+                if (telemetryConfidenceVal) {
+                    telemetryConfidenceVal.textContent = '-';
+                }
+                if (telemetryDurationVal) {
+                    telemetryDurationVal.textContent = '-';
+                }
+                if (telemetryLatestVal) {
+                    telemetryLatestVal.textContent = '-';
+                }
+            }
+
+            // Reset results panel
+            function resetSearchResultsPanel(source) {
+                updateSearchStatus(searchTags.length > 0 ? 'Ready to Search' : 'No Query');
+                resetTelemetryPanel();
+
+                const resultsPanel = document.getElementById('search-results-panel');
+                if (!resultsPanel) return;
+
+                resultsPanel.className = "space-y-2 text-lg text-text-light flex flex-col justify-center items-center text-center py-12 text-text-muted";
+                if (searchTags.length === 0) {
+                    resultsPanel.innerHTML = `
+                        <svg data-feather="search" class="w-8 h-8 mb-2 text-text-muted/30"></svg>
+                        <p class="font-semibold text-text-light text-base">Enter an object name to begin searching.</p>`;
+                } else {
+                    resultsPanel.innerHTML = `
+                        <svg data-feather="play-circle" class="w-8 h-8 mb-2 text-accent-blue/60"></svg>
+                        <p class="font-semibold text-text-light text-base">Ready to Search</p>
+                        <p class="text-sm text-text-muted max-w-[220px] mt-1">Click "Start Search" to scan.</p>`;
+                }
+                feather.replace();
+            }
+
+            async function updateBackendSearchQuery() {
+                const queryStr = searchTags.join(',');
+                if (currentSearchSource === 'webcam' && searchWebcamActive) {
+                    await fetch(`/update_search_query?query=${encodeURIComponent(queryStr)}`);
+                }
+                if (currentSearchSource === 'video' && searchVideoIntervalId) {
+                    await fetch(`/update_search_query?query=${encodeURIComponent(queryStr)}`);
+                }
+            }
+
+            // Webcam handlers
+            async function startWebcamSearch() {
+                if (searchWebcamActivating || searchWebcamActive) return;
+
+                searchWebcamActivating = true;
+                setSearchUILocked(true);
+                setExecuteButtonState('activating');
+                updateSearchStatus('Searching');
+
+                hideFindingsReport();
+
+                // Reset session variables
+                currentSearchId = generateSearchId();
+                if (searchTelemetryGuidance) searchTelemetryGuidance.classList.add('hidden');
+                if (searchTelemetryMetrics) searchTelemetryMetrics.classList.remove('hidden');
+
+                searchStartTime = Date.now();
+                searchSessionDurationSeconds = 0;
+                searchSessionMaxConfidence = 0;
+                searchSessionOccurrences = {};
+                searchSessionLatestDetection = "-";
+
+                // Populate telemetry duration timer
+                if (telemetryDurationVal) telemetryDurationVal.textContent = "0s";
+                if (searchSessionTimerId) clearInterval(searchSessionTimerId);
+                searchSessionTimerId = setInterval(() => {
+                    searchSessionDurationSeconds++;
+                    if (telemetryDurationVal) {
+                        telemetryDurationVal.textContent = `${searchSessionDurationSeconds}s`;
+                    }
+                }, 1000);
+
+                const queryStr = searchTags.join(',');
+                const sliderVal = parseFloat(searchConfidenceSlider.value) / 100;
+
+                try {
+                    const res = await fetch(`/start_webcam?query=${encodeURIComponent(queryStr)}&threshold=${sliderVal}`);
+                    const data = await res.json();
+
+                    if (data.success) {
+                        searchWebcamActive = true;
+                        if (searchWebcamStandby) searchWebcamStandby.classList.add('hidden');
+                        if (searchWebcamFeed) {
+                            searchWebcamFeed.src = "/video_feed?t=" + Date.now();
+                            searchWebcamFeed.classList.remove('hidden');
+                        }
+
+                        setExecuteButtonState('active');
+
+                        if (searchWebcamIntervalId) clearInterval(searchWebcamIntervalId);
+                        searchWebcamIntervalId = setInterval(async () => {
+                            try {
+                                const dataRes = await fetch('/webcam_data');
+                                const objects = await dataRes.json();
+                                processLiveWebcamTelemetry(objects);
+                            } catch (e) {
+                                console.error("Webcam poll error:", e);
+                            }
+                        }, 200);
+
+                    } else {
+                        showGlobalAlert("Could not activate webcam. Make sure no other program is using it.");
+                        cleanupWebcamSearchState();
+                    }
+                } catch (err) {
+                    console.error("Error activating webcam:", err);
+                    showGlobalAlert("An error occurred while activating the webcam.");
+                    cleanupWebcamSearchState();
+                } finally {
+                    searchWebcamActivating = false;
+                    setSearchUILocked(false);
+                }
+            }
+
+            async function stopWebcamSearch() {
+                if (!searchWebcamActive) return;
+
+                if (searchWebcamIntervalId) {
+                    clearInterval(searchWebcamIntervalId);
+                    searchWebcamIntervalId = null;
+                }
+                if (searchSessionTimerId) {
+                    clearInterval(searchSessionTimerId);
+                    searchSessionTimerId = null;
+                }
+
+                searchWebcamActive = false;
+
+                if (searchWebcamFeed) {
+                    searchWebcamFeed.classList.add('hidden');
+                    searchWebcamFeed.src = '';
+                }
+                if (searchWebcamStandby) searchWebcamStandby.classList.remove('hidden');
+
+                setExecuteButtonState('idle');
+                updateSearchStatus('Completed');
+
+                await fetch('/stop_webcam');
+                generateFindingsReport();
+            }
+
+            function cleanupWebcamSearchState() {
+                searchWebcamActive = false;
+                if (searchWebcamIntervalId) {
+                    clearInterval(searchWebcamIntervalId);
+                    searchWebcamIntervalId = null;
+                }
+                if (searchSessionTimerId) {
+                    clearInterval(searchSessionTimerId);
+                    searchSessionTimerId = null;
+                }
+                if (searchWebcamFeed) {
+                    searchWebcamFeed.classList.add('hidden');
+                    searchWebcamFeed.src = '';
+                }
+                if (searchWebcamStandby) searchWebcamStandby.classList.remove('hidden');
+                setExecuteButtonState('idle');
+                updateSearchStatus('Ready to Search');
+            }
+
+            // Live Webcam Telemetry
+            function processLiveWebcamTelemetry(objects) {
+                const sliderVal = parseFloat(searchConfidenceSlider.value) / 100;
+                
+                // Filter matches by current search query tags and confidence slider value
+                const matched = (objects || []).filter(obj => {
+                    const nameLower = obj.name.toLowerCase();
+                    return obj.confidence >= sliderVal && searchTags.includes(nameLower);
+                });
+
+                let currentMaxConf = 0;
+                const frameClassCounts = {};
+
+                matched.forEach(obj => {
+                    const name = obj.name.toLowerCase();
+                    frameClassCounts[name] = (frameClassCounts[name] || 0) + 1;
+                    
+                    if (obj.confidence > currentMaxConf) {
+                        currentMaxConf = obj.confidence;
+                    }
+                    if (obj.confidence > searchSessionMaxConfidence) {
+                        searchSessionMaxConfidence = obj.confidence;
+                    }
+
+                    if (!searchSessionOccurrences[name]) {
+                        searchSessionOccurrences[name] = { peakCount: 0, maxConfidence: 0 };
+                    }
+                    searchSessionOccurrences[name].maxConfidence = Math.max(searchSessionOccurrences[name].maxConfidence, obj.confidence);
+                });
+
+                // Update peak count
+                for (const [name, count] of Object.entries(frameClassCounts)) {
+                    searchSessionOccurrences[name].peakCount = Math.max(searchSessionOccurrences[name].peakCount, count);
+                }
+
+                // Calculate session total matches (peak sum of active targets)
+                let sessionTotalMatches = 0;
+                searchTags.forEach(cls => {
+                    if (searchSessionOccurrences[cls]) {
+                        sessionTotalMatches += searchSessionOccurrences[cls].peakCount || 0;
+                    }
+                });
+
+                if (telemetryMatchesVal) {
+                    telemetryMatchesVal.textContent = sessionTotalMatches;
+                }
+
+                if (telemetryConfidenceVal) {
+                    telemetryConfidenceVal.textContent = searchSessionMaxConfidence > 0 ? `${Math.round(searchSessionMaxConfidence * 100)}%` : "-";
+                }
+
+                if (matched.length > 0) {
+                    const topObj = matched.reduce((prev, current) => (prev.confidence > current.confidence) ? prev : current);
+                    searchSessionLatestDetection = `${topObj.name.charAt(0).toUpperCase() + topObj.name.slice(1)} (${Math.round(topObj.confidence * 100)}%)`;
+                    if (telemetryLatestVal) {
+                        telemetryLatestVal.textContent = searchSessionLatestDetection;
+                    }
+                    updateSearchStatus('Found');
+                } else {
+                    updateSearchStatus('Searching');
+                }
+            }
+
+            // Local Image search runner
+            async function runImageSearch() {
+                if (!searchUploadedImage) return;
+
+                setSearchUILocked(true);
+                setExecuteButtonState('activating');
+                updateSearchStatus('Searching');
+
+                hideFindingsReport();
+
+                // Reset variables
+                currentSearchId = generateSearchId();
+                if (searchTelemetryGuidance) searchTelemetryGuidance.classList.add('hidden');
+                if (searchTelemetryMetrics) searchTelemetryMetrics.classList.remove('hidden');
+
+                searchSessionDurationSeconds = 0;
+                searchSessionMaxConfidence = 0;
+                searchSessionOccurrences = {};
+                searchSessionLatestDetection = "-";
+
+                if (telemetryDurationVal) telemetryDurationVal.textContent = "0s";
+
+                const formData = new FormData();
+                formData.append('image', searchUploadedImage);
+                formData.append('raw', 'true');
+                formData.append('threshold', '0.10');
+
+                const startTime = Date.now();
+
+                try {
+                    const res = await fetch('/upload_image', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                        searchSessionDurationSeconds = elapsed;
+                        if (telemetryDurationVal) telemetryDurationVal.textContent = `${elapsed}s`;
+
+                        cachedDetections = data.objects || [];
+                        cachedWidth = data.width || cachedWidth;
+                        cachedHeight = data.height || cachedHeight;
+
+                        // Canvas Red Boxes renderer
+                        drawFilteredImageOnCanvas();
+
+                        // Accumulate details for telemetry
+                        const sliderVal = parseFloat(searchConfidenceSlider.value) / 100;
+                        const matched = cachedDetections.filter(obj => {
+                            const nameLower = obj.name.toLowerCase();
+                            return obj.confidence >= sliderVal && searchTags.includes(nameLower);
+                        });
+
+                        if (telemetryMatchesVal) {
+                            telemetryMatchesVal.textContent = matched.length;
+                        }
+
+                        let maxConf = 0;
+                        const classCounts = {};
+                        
+                        matched.forEach(obj => {
+                            const name = obj.name.toLowerCase();
+                            classCounts[name] = (classCounts[name] || 0) + 1;
+                            if (obj.confidence > maxConf) {
+                                maxConf = obj.confidence;
+                            }
+                            if (obj.confidence > searchSessionMaxConfidence) {
+                                searchSessionMaxConfidence = obj.confidence;
+                            }
+                            if (!searchSessionOccurrences[name]) {
+                                searchSessionOccurrences[name] = { peakCount: 0, maxConfidence: 0 };
+                            }
+                            searchSessionOccurrences[name].maxConfidence = Math.max(searchSessionOccurrences[name].maxConfidence, obj.confidence);
+                        });
+
+                        for (const [name, count] of Object.entries(classCounts)) {
+                            searchSessionOccurrences[name].peakCount = count;
+                        }
+
+                        if (telemetryConfidenceVal) {
+                            telemetryConfidenceVal.textContent = maxConf > 0 ? `${Math.round(maxConf * 100)}%` : "-";
+                        }
+
+                        if (matched.length > 0) {
+                            const topObj = matched.reduce((prev, current) => (prev.confidence > current.confidence) ? prev : current);
+                            searchSessionLatestDetection = `${topObj.name.charAt(0).toUpperCase() + topObj.name.slice(1)} (${Math.round(topObj.confidence * 100)}%)`;
+                            if (telemetryLatestVal) {
+                                telemetryLatestVal.textContent = searchSessionLatestDetection;
+                            }
+                            updateSearchStatus('Found');
+                        } else {
+                            if (telemetryLatestVal) telemetryLatestVal.textContent = "-";
+                            updateSearchStatus('Not Found');
+                        }
+
+                        generateFindingsReport();
+                    } else {
+                        showGlobalAlert("Error during detection: " + data.error);
+                        updateSearchStatus('Error');
+                    }
+                } catch (err) {
+                    console.error("Detection error:", err);
+                    showGlobalAlert("An error occurred during image detection.");
+                    updateSearchStatus('Error');
+                } finally {
+                    setExecuteButtonState('idle');
+                    setSearchUILocked(false);
+                }
+            }
+
+            // Canvas Drawing with custom red bounding boxes
+            function drawFilteredImageOnCanvas() {
+                if (!cachedImageObj || !cachedDetections) return;
+
+                const canvas = document.getElementById('search-image-canvas');
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+
+                canvas.width = cachedWidth;
+                canvas.height = cachedHeight;
+
+                ctx.drawImage(cachedImageObj, 0, 0, cachedWidth, cachedHeight);
+
+                const sliderVal = parseFloat(searchConfidenceSlider.value) / 100;
+
+                // Match only searched targets and filter out the rest
+                const filtered = cachedDetections.filter(obj => {
+                    const confMatch = obj.confidence >= sliderVal;
+                    if (searchTags.length === 0) return false;
+                    const nameLower = obj.name.toLowerCase();
+                    return confMatch && searchTags.includes(nameLower);
+                });
+
+                // Render red bounding boxes
+                filtered.forEach(obj => {
+                    const [x1, y1, x2, y2] = obj.box;
+                    const w = x2 - x1;
+                    const h = y2 - y1;
+
+                    // Red stroke
+                    ctx.strokeStyle = '#EF4444';
+                    ctx.lineWidth = Math.max(2, Math.round(cachedWidth / 300));
+                    ctx.strokeRect(x1, y1, w, h);
+
+                    const fontSize = Math.max(12, Math.round(cachedWidth / 50));
+                    ctx.font = `bold ${fontSize}px sans-serif`;
+                    const labelText = `${obj.name.toUpperCase()} ${Math.round(obj.confidence * 100)}%`;
+                    const textWidth = ctx.measureText(labelText).width;
+                    const textHeight = fontSize + 6;
+
+                    // Red filled background
+                    ctx.fillStyle = '#EF4444';
+                    let labelY = y1 - textHeight;
+                    if (labelY < 0) labelY = y1;
+                    ctx.fillRect(x1, labelY, textWidth + 10, textHeight);
+
+                    // White text
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillText(labelText, x1 + 5, labelY + fontSize - 2);
+                });
+            }
+
+            // Drag and drop / file selection bindings for image
+            searchImageUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                searchImageUploadArea.classList.add('border-accent-blue/50', 'bg-accent-blue/5');
+            });
+            searchImageUploadArea.addEventListener('dragleave', () => {
+                searchImageUploadArea.classList.remove('border-accent-blue/50', 'bg-accent-blue/5');
+            });
+            searchImageUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                searchImageUploadArea.classList.remove('border-accent-blue/50', 'bg-accent-blue/5');
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleSearchImageSelected(e.dataTransfer.files[0]);
+                }
+            });
+            searchImageInput.addEventListener('change', () => {
+                if (searchImageInput.files && searchImageInput.files[0]) {
+                    handleSearchImageSelected(searchImageInput.files[0]);
+                }
+            });
+
+            function handleSearchImageSelected(file) {
+                searchUploadedImage = file;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    cachedImageObj = new Image();
+                    cachedImageObj.onload = function() {
+                        cachedWidth = cachedImageObj.naturalWidth;
+                        cachedHeight = cachedImageObj.naturalHeight;
+
+                        const canvas = document.getElementById('search-image-canvas');
+                        if (canvas) {
+                            canvas.classList.remove('hidden');
+                            canvas.width = cachedWidth;
+                            canvas.height = cachedHeight;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(cachedImageObj, 0, 0, cachedWidth, cachedHeight);
+                        }
+                        if (searchImagePlaceholder) searchImagePlaceholder.classList.add('hidden');
+
+                        cachedDetections = null;
+                        updateSearchStatus('Image Loaded');
+                        resetSearchResultsPanel("image");
+                    };
+                    cachedImageObj.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+
+            if (searchImageChangeBtn) {
+                searchImageChangeBtn.addEventListener('click', () => {
+                    if (searchImageChangeBtn.disabled) return;
+                    searchImageInput.value = '';
+                    searchUploadedImage = null;
+                    cachedDetections = null;
+                    cachedImageObj = null;
+                    
+                    const canvas = document.getElementById('search-image-canvas');
+                    if (canvas) {
+                        canvas.classList.add('hidden');
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
+
+                    if (searchImagePlaceholder) searchImagePlaceholder.classList.remove('hidden');
+                    resetSearchResultsPanel("image");
+                    searchImageInput.click();
+                });
+            }
+
+            // Video handlers
+            async function startVideoSearch() {
+                if (searchVideoActivating || searchVideoIntervalId) return;
+
+                searchVideoActivating = true;
+                setSearchUILocked(true);
+                setExecuteButtonState('activating');
+                updateSearchStatus('Searching');
+
+                hideFindingsReport();
+
+                // Reset session variables
+                currentSearchId = generateSearchId();
+                if (searchTelemetryGuidance) searchTelemetryGuidance.classList.add('hidden');
+                if (searchTelemetryMetrics) searchTelemetryMetrics.classList.remove('hidden');
+
+                searchStartTime = Date.now();
+                searchSessionDurationSeconds = 0;
+                searchSessionMaxConfidence = 0;
+                searchSessionOccurrences = {};
+                searchSessionLatestDetection = "-";
+
+                if (telemetryDurationVal) telemetryDurationVal.textContent = "0s";
+                if (searchSessionTimerId) clearInterval(searchSessionTimerId);
+                searchSessionTimerId = setInterval(() => {
+                    searchSessionDurationSeconds++;
+                    if (telemetryDurationVal) {
+                        telemetryDurationVal.textContent = `${searchSessionDurationSeconds}s`;
+                    }
+                }, 1000);
+
+                const queryStr = searchTags.join(',');
+                const sliderVal = parseFloat(searchConfidenceSlider.value) / 100;
+
+                const formData = new FormData();
+                formData.append('mode', 'fast');
+                formData.append('query', queryStr);
+                formData.append('threshold', sliderVal);
+
+                try {
+                    const res = await fetch('/start_video_detection', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const startData = await res.json();
+
+                    if (!startData.success) {
+                        throw new Error(startData.error || "Failed to start video processing.");
+                    }
+
+                    // Swap preview player to live MJPEG stream (after successful activation to avoid race condition)
+                    if (searchVideoPreview) searchVideoPreview.classList.add('hidden');
+                    if (searchVideoResultFrame) {
+                        searchVideoResultFrame.src = "/video_detection_feed?t=" + Date.now();
+                        searchVideoResultFrame.classList.remove('hidden');
+                    }
+                    if (searchToggleVideoViewBtn) searchToggleVideoViewBtn.classList.add('hidden');
+
+                    searchVideoActivating = false;
+                    // Keep execute stop enabled
+                    setSearchUILocked(true);
+                    if (searchExecuteBtn) searchExecuteBtn.disabled = false;
+                    setExecuteButtonState('active');
+
+                    if (searchVideoIntervalId) clearInterval(searchVideoIntervalId);
+                    searchVideoIntervalId = setInterval(async () => {
+                        try {
+                            const dataRes = await fetch('/video_detection_data');
+                            const data = await dataRes.json();
+                            const currentSliderVal = parseFloat(searchConfidenceSlider.value) / 100;
+
+                            if (data.status === "processing" || data.status === "completed") {
+                                // Authoritatively sync searchSessionOccurrences from the backend's summary objects
+                                if (data.summary && data.summary.objects) {
+                                    searchSessionOccurrences = {};
+                                    searchSessionMaxConfidence = 0;
+                                    data.summary.objects.forEach(obj => {
+                                        const name = obj.name.toLowerCase();
+                                        if (searchTags.includes(name) && obj.max_conf >= currentSliderVal) {
+                                            searchSessionOccurrences[name] = {
+                                                peakCount: obj.peak_sim || obj.count,
+                                                maxConfidence: obj.max_conf
+                                            };
+                                            if (obj.max_conf > searchSessionMaxConfidence) {
+                                                searchSessionMaxConfidence = obj.max_conf;
+                                            }
+                                        }
+                                    });
+                                }
+
+                                // Count current frame detections matching active query and threshold
+                                const matchedInFrame = [];
+                                let frameMaxConf = 0;
+                                if (data.objects && data.objects.length > 0) {
+                                    data.objects.forEach(obj => {
+                                        const name = obj.name.toLowerCase();
+                                        if (searchTags.includes(name) && obj.confidence >= currentSliderVal) {
+                                            matchedInFrame.push(obj);
+                                            if (obj.confidence > frameMaxConf) {
+                                                frameMaxConf = obj.confidence;
+                                            }
+                                        }
+                                    });
+                                }
+
+                                // Update Status Badge with progress and target detection status
+                                if (data.status === "processing") {
+                                    if (matchedInFrame.length > 0) {
+                                        updateSearchStatus(`Found (${data.progress_percent}%)`);
+                                    } else {
+                                        updateSearchStatus(`Searching (${data.progress_percent}%)`);
+                                    }
+                                }
+
+                                // Update Matches Found This Session to session peak count sum
+                                let totalMatchesCount = 0;
+                                Object.keys(searchSessionOccurrences).forEach(cls => {
+                                    totalMatchesCount += searchSessionOccurrences[cls].peakCount || 0;
+                                });
+                                if (telemetryMatchesVal) {
+                                    telemetryMatchesVal.textContent = totalMatchesCount;
+                                }
+
+                                // Update Highest Confidence Seen to session max confidence
+                                if (telemetryConfidenceVal) {
+                                    telemetryConfidenceVal.textContent = searchSessionMaxConfidence > 0 ? `${Math.round(searchSessionMaxConfidence * 100)}%` : "-";
+                                }
+
+                                // Update Latest Detection to the highest confidence match in this frame
+                                if (matchedInFrame.length > 0) {
+                                    const topObj = matchedInFrame.reduce((prev, current) => (prev.confidence > current.confidence) ? prev : current);
+                                    searchSessionLatestDetection = `${topObj.name.charAt(0).toUpperCase() + topObj.name.slice(1)} (${Math.round(topObj.confidence * 100)}%)`;
+                                    if (telemetryLatestVal) {
+                                        telemetryLatestVal.textContent = searchSessionLatestDetection;
+                                    }
+                                }
+                            }
+
+                            if (data.status === "completed") {
+                                clearInterval(searchVideoIntervalId);
+                                searchVideoIntervalId = null;
+
+                                if (searchSessionTimerId) {
+                                    clearInterval(searchSessionTimerId);
+                                    searchSessionTimerId = null;
+                                }
+
+                                const duration = Math.round(data.video_duration || 0);
+                                searchSessionDurationSeconds = duration;
+                                if (telemetryDurationVal) {
+                                    telemetryDurationVal.textContent = `${duration}s`;
+                                }
+
+                                if (data.frame && searchVideoResultFrame) {
+                                    searchVideoResultFrame.src = `data:image/jpeg;base64,${data.frame}`;
+                                    searchVideoResultFrame.classList.remove('hidden');
+                                }
+                                if (searchVideoPreview) searchVideoPreview.classList.add('hidden');
+                                if (searchToggleVideoViewBtn) {
+                                    searchToggleVideoViewBtn.classList.remove('hidden');
+                                    searchToggleVideoViewBtn.textContent = 'View Original Video';
+                                }
+
+                                updateSearchStatus('Completed');
+                                setExecuteButtonState('idle');
+                                setSearchUILocked(false);
+
+                                generateFindingsReport();
+
+                            } else if (data.status === "error") {
+                                throw new Error("Backend video processing error");
+                            }
+                        } catch (err) {
+                            console.error("Video polling error:", err);
+                            showGlobalAlert(`Video scanning error: ${err.message}`);
+                            cleanupVideoSearchState();
+                        }
+                    }, 250);
+
+                } catch (err) {
+                    console.error("Video start error:", err);
+                    showGlobalAlert(`Initialization error: ${err.message}`);
+                    cleanupVideoSearchState();
+                } finally {
+                    searchVideoActivating = false;
+                    setSearchUILocked(false);
+                }
+            }
+
+            async function stopVideoSearch() {
+                if (!searchVideoIntervalId) return;
+
+                clearInterval(searchVideoIntervalId);
+                searchVideoIntervalId = null;
+
+                if (searchSessionTimerId) {
+                    clearInterval(searchSessionTimerId);
+                    searchSessionTimerId = null;
+                }
+
+                setExecuteButtonState('idle');
+                updateSearchStatus('Completed');
+                setSearchUILocked(false);
+
+                await fetch('/stop_video_detection', { method: 'POST' });
+                generateFindingsReport();
+            }
+
+            function cleanupVideoSearchState() {
+                if (searchVideoIntervalId) {
+                    clearInterval(searchVideoIntervalId);
+                    searchVideoIntervalId = null;
+                }
+                if (searchSessionTimerId) {
+                    clearInterval(searchSessionTimerId);
+                    searchSessionTimerId = null;
+                }
+                if (searchVideoResultFrame) {
+                    searchVideoResultFrame.classList.add('hidden');
+                    searchVideoResultFrame.src = '';
+                }
+                if (searchVideoPreview) {
+                    searchVideoPreview.classList.remove('hidden');
+                }
+                if (searchToggleVideoViewBtn) searchToggleVideoViewBtn.classList.add('hidden');
+                setExecuteButtonState('idle');
+                updateSearchStatus('Ready to Search');
+                setSearchUILocked(false);
+            }
+
+            // Drag and drop / upload bindings for video
+            searchVideoUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                searchVideoUploadArea.classList.add('border-accent-blue/50', 'bg-accent-blue/5');
+            });
+            searchVideoUploadArea.addEventListener('dragleave', () => {
+                searchVideoUploadArea.classList.remove('border-accent-blue/50', 'bg-accent-blue/5');
+            });
+            searchVideoUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                searchVideoUploadArea.classList.remove('border-accent-blue/50', 'bg-accent-blue/5');
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleSearchVideoSelected(e.dataTransfer.files[0]);
+                }
+            });
+            searchVideoInput.addEventListener('change', () => {
+                if (searchVideoInput.files && searchVideoInput.files[0]) {
+                    handleSearchVideoSelected(searchVideoInput.files[0]);
+                }
+            });
+
+            async function handleSearchVideoSelected(file) {
+                searchUploadedVideo = file;
+                if (searchVideoPreview) {
+                    searchVideoPreview.src = URL.createObjectURL(file);
+                    searchVideoPreview.classList.remove('hidden');
+                }
+                if (searchVideoResultFrame) {
+                    searchVideoResultFrame.classList.add('hidden');
+                    searchVideoResultFrame.src = '';
+                }
+                if (searchToggleVideoViewBtn) searchToggleVideoViewBtn.classList.add('hidden');
+                if (searchVideoPlaceholder) searchVideoPlaceholder.classList.add('hidden');
+
+                updateSearchStatus('Uploading');
+
+                const formData = new FormData();
+                formData.append('video', searchUploadedVideo);
+
+                try {
+                    const res = await fetch('/upload_video', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        updateSearchStatus('Video Loaded');
+                    } else {
+                        showGlobalAlert("Upload failed: " + data.error);
+                        updateSearchStatus('Error');
+                    }
+                } catch (err) {
+                    console.error("Video upload error:", err);
+                    showGlobalAlert("Connection error uploading video.");
+                    updateSearchStatus('Error');
+                } finally {
+                    feather.replace();
+                }
+            }
+
+            if (searchVideoChangeBtn) {
+                searchVideoChangeBtn.addEventListener('click', async () => {
+                    if (searchVideoChangeBtn.disabled) return;
+                    if (searchVideoIntervalId) {
+                        clearInterval(searchVideoIntervalId);
+                        searchVideoIntervalId = null;
+                    }
+                    await fetch('/stop_video_detection', { method: 'POST' });
+
+                    searchVideoInput.value = '';
+                    searchUploadedVideo = null;
+                    if (searchVideoPreview) {
+                        searchVideoPreview.classList.add('hidden');
+                        searchVideoPreview.src = '';
+                    }
+                    if (searchVideoResultFrame) {
+                        searchVideoResultFrame.classList.add('hidden');
+                        searchVideoResultFrame.src = '';
+                    }
+                    if (searchToggleVideoViewBtn) searchToggleVideoViewBtn.classList.add('hidden');
+                    if (searchVideoPlaceholder) searchVideoPlaceholder.classList.remove('hidden');
+                    resetSearchResultsPanel("video");
+                    searchVideoInput.click();
+                });
+            }
+
+            // Findings Report Renderer
+            function generateFindingsReport() {
+                if (!searchFindingsReport) return;
+
+                const foundClasses = Object.keys(searchSessionOccurrences).filter(cls => searchTags.includes(cls));
+                const isFound = foundClasses.length > 0;
+
+                if (findingsStatusBadge) {
+                    if (isFound) {
+                        findingsStatusBadge.textContent = "FOUND";
+                        findingsStatusBadge.className = "inline-flex items-center px-2.5 py-0.5 rounded-[4px] text-xs font-bold bg-green-500/10 text-green-400 border border-green-500/20";
+                    } else {
+                        findingsStatusBadge.textContent = "NOT FOUND";
+                        findingsStatusBadge.className = "inline-flex items-center px-2.5 py-0.5 rounded-[4px] text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20";
+                    }
+                }
+
+                if (findingsSearchId) {
+                    findingsSearchId.textContent = currentSearchId || "-";
+                }
+
+                if (findingsSource) {
+                    findingsSource.textContent = currentSearchSource.toUpperCase();
+                }
+
+                if (findingsStatusText) {
+                    findingsStatusText.textContent = isFound ? "FOUND" : "NOT FOUND";
+                }
+
+                if (findingsQueryTargets) {
+                    findingsQueryTargets.innerHTML = '';
+                    searchTags.forEach(tag => {
+                        const chip = document.createElement('span');
+                        chip.className = "px-2.5 py-1 bg-white/5 border border-white/10 text-text-muted rounded-full text-xs font-semibold mr-1.5 mb-1.5 inline-block";
+                        chip.textContent = tag;
+                        findingsQueryTargets.appendChild(chip);
+                    });
+                    if (searchTags.length === 0) {
+                        findingsQueryTargets.textContent = '-';
+                    }
+                }
+
+                let totalMatchesCount = 0;
+                foundClasses.forEach(cls => {
+                    totalMatchesCount += searchSessionOccurrences[cls].peakCount || 0;
+                });
+
+                if (findingsTotalMatches) {
+                    findingsTotalMatches.textContent = totalMatchesCount;
+                }
+
+                if (findingsMaxConfidence) {
+                    findingsMaxConfidence.textContent = searchSessionMaxConfidence > 0 ? `${Math.round(searchSessionMaxConfidence * 100)}%` : "-";
+                }
+
+                if (findingsDuration) {
+                    findingsDuration.textContent = `${searchSessionDurationSeconds}s`;
+                }
+
+                if (findingsObjectsTbody) {
+                    findingsObjectsTbody.innerHTML = '';
+                    
+                    searchTags.forEach(cls => {
+                        const displayName = cls.charAt(0).toUpperCase() + cls.slice(1);
+                        const stats = searchSessionOccurrences[cls];
+                        
+                        const tr = document.createElement('tr');
+                        tr.className = "border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors";
+                        
+                        if (stats && stats.peakCount > 0) {
+                            tr.innerHTML = `
+                                <td class="py-3.5 px-4 font-semibold text-text-light flex items-center">
+                                    <span class="w-2 h-2 rounded-full bg-green-500 mr-2.5"></span>
+                                    ${displayName}
+                                </td>
+                                <td class="py-3.5 px-4 text-center text-text-light font-bold">
+                                    ${stats.peakCount} (Peak Sim.)
+                                </td>
+                                <td class="py-3.5 px-4 text-right text-accent-blue font-bold">
+                                    ${Math.round(stats.maxConfidence * 100)}%
+                                </td>
+                            `;
+                        } else {
+                            tr.innerHTML = `
+                                <td class="py-3.5 px-4 font-semibold text-text-muted flex items-center">
+                                    <span class="w-2 h-2 rounded-full bg-red-500/40 mr-2.5"></span>
+                                    ${displayName}
+                                </td>
+                                <td class="py-3.5 px-4 text-center text-text-muted">
+                                    0
+                                </td>
+                                <td class="py-3.5 px-4 text-right text-text-muted">
+                                    -
+                                </td>
+                            `;
+                        }
+                        findingsObjectsTbody.appendChild(tr);
+                    });
+                }
+
+                searchFindingsReport.classList.remove('hidden');
+                feather.replace();
+            }
+
+            function hideFindingsReport() {
+                if (searchFindingsReport) {
+                    searchFindingsReport.classList.add('hidden');
+                }
+            }
+
+            if (searchClearFindingsBtn) {
+                searchClearFindingsBtn.addEventListener('click', () => {
+                    hideFindingsReport();
+                    searchSessionOccurrences = {};
+                    searchSessionMaxConfidence = 0;
+                    resetTelemetryPanel();
+                    if (searchTelemetryGuidance) searchTelemetryGuidance.classList.remove('hidden');
+                    if (searchTelemetryMetrics) searchTelemetryMetrics.classList.add('hidden');
+                });
+            }
+
+            // Initialize categories browser checklist
+            renderCategoryBrowser();
+
+            if (searchToggleVideoViewBtn) {
+                searchToggleVideoViewBtn.addEventListener('click', () => {
+                    if (searchVideoPreview.classList.contains('hidden')) {
+                        searchVideoPreview.classList.remove('hidden');
+                        searchVideoResultFrame.classList.add('hidden');
+                        searchToggleVideoViewBtn.textContent = 'View Scan Result';
+                    } else {
+                        searchVideoPreview.classList.add('hidden');
+                        searchVideoResultFrame.classList.remove('hidden');
+                        searchToggleVideoViewBtn.textContent = 'View Original Video';
+                    }
+                });
+            }
+
+            // Set initial active page (Home) after all controllers have been defined
+            executeSourceSwitch('webcam');
+            switchPage('home');
+
+        });
+    </script>
+</body>
+</html>
