@@ -94,7 +94,9 @@
         }
     </style>
     <script src="https://unpkg.com/feather-icons"></script>
+    <script src="/static/js/webcam_client.js"></script>
 </head>
+
 <body class="bg-background-dark text-text-light min-h-screen font-sans">
 
     <header class="sticky top-0 bg-card-dark bg-opacity-95 backdrop-blur-sm shadow-lg z-50">
@@ -205,11 +207,16 @@
                 <!-- Video Frame (larger) -->
                 <div class="lg:col-span-2 bg-card-dark p-6 rounded-[10px] border border-white/[0.06] shadow-xl flex flex-col items-center">
                     <div id="video-frame" class="w-full aspect-video rounded-[6px] overflow-hidden bg-black flex items-center justify-center relative">
-                        <img src="/uploads/webcam_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-20" alt="Webcam Standby Background">
-                        <div class="relative text-center text-text-light z-10 p-6">
-                            <svg data-feather="video" class="w-10 h-10 mx-auto mb-3 text-accent-blue"></svg>
-                            <h3 class="text-lg font-semibold text-text-light">Webcam Ready</h3>
-                            <p class="text-sm text-text-muted mt-1">System ready. Click "Start Detection" to begin real-time analysis.</p>
+                        <video id="webcam-local" class="hidden" autoplay playsinline muted></video>
+                        <canvas id="webcam-canvas" class="hidden"></canvas>
+                        <img id="webcam-feed" class="w-full h-full object-contain hidden" src="" alt="Webcam Feed">
+                        <div id="webcam-standby" class="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-black z-10">
+                            <img src="/uploads/webcam_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-20" alt="Webcam Standby Background">
+                            <div class="relative text-center text-text-light z-20">
+                                <svg data-feather="video" class="w-10 h-10 mx-auto mb-3 text-accent-blue"></svg>
+                                <h3 class="text-lg font-semibold text-text-light">Webcam Ready</h3>
+                                <p class="text-sm text-text-muted mt-1">System ready. Click "Start Detection" to begin real-time analysis.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -565,6 +572,8 @@
                         
                         <!-- 1. Webcam Viewport -->
                         <div id="search-webcam-viewport" class="w-full h-full flex flex-col items-center justify-center relative">
+                            <video id="search-webcam-local" class="hidden" autoplay playsinline muted></video>
+                            <canvas id="search-webcam-canvas" class="hidden"></canvas>
                             <img id="search-webcam-feed" class="w-full h-full object-contain hidden" src="" alt="Webcam Feed">
                             <div id="search-webcam-standby" class="flex flex-col items-center justify-center p-6 text-center">
                                 <i data-feather="camera" class="w-16 h-16 mx-auto mb-3 text-accent-blue/70"></i>
@@ -842,27 +851,12 @@
                 dismissGlobalAlert();
 
                 // 1. Stop regular webcam if running
-                if (running || (typeof intervalId !== 'undefined' && intervalId)) {
-                    if (typeof intervalId !== 'undefined' && intervalId) {
-                        clearInterval(intervalId);
-                        intervalId = null;
-                    }
-                    running = false;
-                    fetch('/stop_webcam');
+                if (typeof mainWebcamClient !== 'undefined' && mainWebcamClient.running) {
+                    mainWebcamClient.stop();
                     const webcamStatusBadge = document.getElementById('webcam-status-badge');
                     if (webcamStatusBadge) {
                         webcamStatusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-white/5 text-text-muted rounded-[4px] border border-white/[0.06]";
                         webcamStatusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>Idle`;
-                    }
-                    const videoFrame = document.getElementById('video-frame');
-                    if (videoFrame) {
-                        videoFrame.innerHTML = `
-                            <img src="/uploads/webcam_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-20" alt="Webcam Standby Background">
-                            <div class="relative text-center text-text-light z-10 p-6">
-                                <svg data-feather="video" class="w-10 h-10 mx-auto mb-3 text-accent-blue"></svg>
-                                <h3 class="text-lg font-semibold text-text-light">Webcam Ready</h3>
-                                <p class="text-sm text-text-muted mt-1">System ready. Click "Start Detection" to begin real-time analysis.</p>
-                            </div>`;
                     }
                     const detectionPanel = document.getElementById('detection-panel');
                     if (detectionPanel) {
@@ -924,52 +918,31 @@
             });
 
             // WEBCAM Detection
-            let running = false;
-            let intervalId;
             let sessionStartTime = null;
             let sessionObjects = {};
-            const videoFrame = document.getElementById('video-frame');
             const detectionPanel = document.getElementById('detection-panel');
             const startBtn = document.getElementById('start-btn');
             const stopBtn = document.getElementById('stop-btn');
 
-            startBtn.addEventListener('click', async () => {
-                if (!running) {
-                    const res = await fetch('/start_webcam');
-                    const data = await res.json();
-                    if (data.success) {
-                        running = true;
-                        
-                        // Reset session metrics
-                        sessionStartTime = Date.now();
-                        sessionObjects = {};
-                        
-                        // Hide summary card smoothly
-                        const summaryCard = document.getElementById('webcam-summary-card');
-                        if (summaryCard) {
-                            summaryCard.classList.remove('show');
-                        }
-
-                        videoFrame.innerHTML = `<img id="live-feed" src="/video_feed" class="w-full h-full object-cover rounded-[6px]">`;
-
-                        const statusBadge = document.getElementById('webcam-status-badge');
-                        if (statusBadge) {
-                            statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-500/10 text-green-400 rounded-[4px] border border-green-500/20";
-                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>Running`;
-                        }
-
-                        intervalId = setInterval(async () => {
-                            const res = await fetch('/webcam_data');
-                            const objects = await res.json();
-                            
+            const mainWebcamClient = new WebcamClient({
+                videoId: 'webcam-local',
+                canvasId: 'webcam-canvas',
+                feedImgId: 'webcam-feed',
+                frameInterval: 300,
+                quality: 0.5,
+                onFrameProcessed: () => {
+                    return {
+                        query: '', // main tab detects all objects
+                        threshold: 0.25,
+                        callback: (objects, meta) => {
                             // Accumulate detection metrics
                             if (objects && objects.length > 0) {
                                 objects.forEach(obj => {
                                     if (!sessionObjects[obj.name]) {
                                         sessionObjects[obj.name] = { count: 0, maxConfidence: 0 };
                                     }
-                                    sessionObjects[obj.name].count += 1;
-                                    sessionObjects[obj.name].maxConfidence = Math.max(sessionObjects[obj.name].maxConfidence, obj.confidence);
+                                    sessionObjects[obj.name].count += obj.count || 1;
+                                    sessionObjects[obj.name].maxConfidence = Math.max(sessionObjects[obj.name].maxConfidence, obj.max_confidence || obj.confidence);
                                 });
                             }
 
@@ -980,28 +953,61 @@
                                 detectionPanel.innerHTML = '';
                                 detectionPanel.className = "text-text-light text-lg space-y-2";
                                 objects.forEach(obj => {
+                                    const countStr = obj.count > 1 ? ` <span class="text-text-muted text-xs">x${obj.count}</span>` : '';
                                     detectionPanel.innerHTML += `
                                         <div class="flex justify-between items-center border-b border-text-muted/10 pb-2">
-                                            <span class="font-semibold text-text-light text-base">${obj.name}</span>
-                                            <span class="px-2 py-0.5 text-xs font-semibold rounded-[4px] bg-accent-blue/30 text-accent-blue">${Math.round(obj.confidence * 100)}%</span>
+                                            <span class="font-semibold text-text-light text-base">${obj.name}${countStr}</span>
+                                            <span class="px-2 py-0.5 text-xs font-semibold rounded-[4px] bg-accent-blue/30 text-accent-blue">${Math.round(obj.max_confidence * 100)}%</span>
                                         </div>`;
                                 });
                             }
-                        }, 500);
+                        }
+                    };
+                },
+                onStatusChange: (status) => {
+                    const statusBadge = document.getElementById('webcam-status-badge');
+                    if (status === 'running') {
+                        if (statusBadge) {
+                            statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-500/10 text-green-400 rounded-[4px] border border-green-500/20";
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>Running`;
+                        }
+                        document.getElementById('webcam-standby').classList.add('hidden');
+                        document.getElementById('webcam-feed').classList.remove('hidden');
+                    } else {
+                        if (statusBadge) {
+                            statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-white/5 text-text-muted rounded-[4px] border border-white/[0.06]";
+                            statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>Idle`;
+                        }
+                        document.getElementById('webcam-standby').classList.remove('hidden');
+                        document.getElementById('webcam-feed').classList.add('hidden');
+                        document.getElementById('webcam-feed').src = '';
                     }
+                },
+                onError: (err) => {
+                    console.error("Main Webcam Client Error:", err);
+                    showGlobalAlert("Could not access your camera. Please ensure camera permissions are enabled in your browser.");
                 }
             });
 
-            stopBtn.addEventListener('click', async () => {
-                if (running) {
-                    await fetch('/stop_webcam');
-                    clearInterval(intervalId);
-                    running = false;
+            startBtn.addEventListener('click', async () => {
+                if (!mainWebcamClient.running) {
+                    sessionStartTime = Date.now();
+                    sessionObjects = {};
                     
-                    // Calculate and populate summary metrics
+                    const summaryCard = document.getElementById('webcam-summary-card');
+                    if (summaryCard) {
+                        summaryCard.classList.remove('show');
+                    }
+                    
+                    await mainWebcamClient.start();
+                }
+            });
+
+            stopBtn.addEventListener('click', () => {
+                if (mainWebcamClient.running) {
+                    mainWebcamClient.stop();
+                    
                     const durationSeconds = Math.round((Date.now() - sessionStartTime) / 1000);
-                    
-                    // Format duration
                     let durationText = `${durationSeconds}s`;
                     if (durationSeconds >= 60) {
                         const minutes = Math.floor(durationSeconds / 60);
@@ -1011,7 +1017,6 @@
                     
                     const uniqueObjectsCount = Object.keys(sessionObjects).length;
                     
-                    // Identify top object
                     let topObject = "-";
                     let maxCount = 0;
                     for (const name in sessionObjects) {
@@ -1021,7 +1026,6 @@
                         }
                     }
                     
-                    // Populate summary DOM
                     const summaryCard = document.getElementById('webcam-summary-card');
                     const emptyState = document.getElementById('summary-empty-state');
                     const contentState = document.getElementById('summary-content-state');
@@ -1038,7 +1042,6 @@
                             document.getElementById('summary-unique-objects').textContent = uniqueObjectsCount;
                             document.getElementById('summary-top-object').textContent = topObject.charAt(0).toUpperCase() + topObject.slice(1);
                             
-                            // Render chips
                             const listContainer = document.getElementById('summary-objects-list');
                             listContainer.innerHTML = '';
                             
@@ -1052,24 +1055,9 @@
                                     </div>`;
                             });
                         }
-                        
-                        // Reveal transition
                         summaryCard.classList.add('show');
                     }
-
-                    videoFrame.innerHTML = `
-                        <img src="/uploads/webcam_icon.png" class="absolute inset-0 w-full h-full object-cover opacity-20" alt="Webcam Standby Background">
-                        <div class="relative text-center text-text-light z-10 p-6">
-                            <svg data-feather="video" class="w-10 h-10 mx-auto mb-3 text-accent-blue"></svg>
-                            <h3 class="text-lg font-semibold text-text-light">Webcam Ready</h3>
-                            <p class="text-sm text-text-muted mt-1">System ready. Click "Start Detection" to begin real-time analysis.</p>
-                        </div>`;
                     
-                    const statusBadge = document.getElementById('webcam-status-badge');
-                    if (statusBadge) {
-                        statusBadge.className = "inline-flex items-center px-2 py-0.5 text-xs font-medium bg-white/5 text-text-muted rounded-[4px] border border-white/[0.06]";
-                        statusBadge.innerHTML = `<span class="w-1.5 h-1.5 bg-neutral-400 rounded-full mr-1.5"></span>Idle`;
-                    }
                     if (uniqueObjectsCount > 0) {
                         detectionPanel.innerHTML = `
                             <svg data-feather="check-circle" class="w-8 h-8 mb-2 text-accent-blue"></svg>
@@ -1684,6 +1672,7 @@
 
             let currentSearchSource = 'webcam';
             let searchWebcamActive = false;
+            let webcamStream = null;
             let searchWebcamIntervalId = null;
             let searchUploadedImage = null;
             let searchUploadedVideo = null;
@@ -2318,9 +2307,8 @@
                     searchWebcamStandby.classList.remove('hidden');
                 }
 
-                if (searchWebcamIntervalId) {
-                    clearInterval(searchWebcamIntervalId);
-                    searchWebcamIntervalId = null;
+                if (typeof searchWebcamClient !== 'undefined') {
+                    searchWebcamClient.stop();
                 }
                 if (searchVideoIntervalId) {
                     clearInterval(searchVideoIntervalId);
@@ -2333,7 +2321,6 @@
 
                 setExecuteButtonState('idle');
 
-                await fetch('/stop_webcam');
                 await fetch('/stop_video_detection', { method: 'POST' });
                 feather.replace();
             }
@@ -2389,7 +2376,50 @@
                 }
             }
 
-            // Webcam handlers
+            // Search Webcam Client
+            const searchWebcamClient = new WebcamClient({
+                videoId: 'search-webcam-local',
+                canvasId: 'search-webcam-canvas',
+                feedImgId: 'search-webcam-feed',
+                frameInterval: 300,
+                quality: 0.5,
+                onFrameProcessed: () => {
+                    const queryStr = searchTags.join(',');
+                    const sliderVal = parseFloat(searchConfidenceSlider.value) / 100;
+                    return {
+                        query: queryStr,
+                        threshold: sliderVal,
+                        callback: (objects, meta) => {
+                            processLiveWebcamTelemetry(objects);
+                        }
+                    };
+                },
+                onStatusChange: (status) => {
+                    if (status === 'running') {
+                        searchWebcamActive = true;
+                        searchWebcamActivating = false;
+                        if (searchWebcamStandby) searchWebcamStandby.classList.add('hidden');
+                        if (searchWebcamFeed) searchWebcamFeed.classList.remove('hidden');
+                        setExecuteButtonState('active');
+                        updateSearchStatus('Searching');
+                    } else {
+                        searchWebcamActive = false;
+                        searchWebcamActivating = false;
+                        if (searchWebcamStandby) searchWebcamStandby.classList.remove('hidden');
+                        if (searchWebcamFeed) {
+                            searchWebcamFeed.classList.add('hidden');
+                            searchWebcamFeed.src = '';
+                        }
+                        setExecuteButtonState('idle');
+                    }
+                },
+                onError: (err) => {
+                    console.error("Search Webcam Client Error:", err);
+                    showGlobalAlert("Could not access your camera. Please ensure camera permissions are enabled in your browser.");
+                    cleanupWebcamSearchState();
+                }
+            });
+
             async function startWebcamSearch() {
                 if (searchWebcamActivating || searchWebcamActive) return;
 
@@ -2421,91 +2451,27 @@
                     }
                 }, 1000);
 
-                const queryStr = searchTags.join(',');
-                const sliderVal = parseFloat(searchConfidenceSlider.value) / 100;
-
-                try {
-                    const res = await fetch(`/start_webcam?query=${encodeURIComponent(queryStr)}&threshold=${sliderVal}`);
-                    const data = await res.json();
-
-                    if (data.success) {
-                        searchWebcamActive = true;
-                        if (searchWebcamStandby) searchWebcamStandby.classList.add('hidden');
-                        if (searchWebcamFeed) {
-                            searchWebcamFeed.src = "/video_feed?t=" + Date.now();
-                            searchWebcamFeed.classList.remove('hidden');
-                        }
-
-                        setExecuteButtonState('active');
-
-                        if (searchWebcamIntervalId) clearInterval(searchWebcamIntervalId);
-                        searchWebcamIntervalId = setInterval(async () => {
-                            try {
-                                const dataRes = await fetch('/webcam_data');
-                                const objects = await dataRes.json();
-                                processLiveWebcamTelemetry(objects);
-                            } catch (e) {
-                                console.error("Webcam poll error:", e);
-                            }
-                        }, 200);
-
-                    } else {
-                        showGlobalAlert("Could not activate webcam. Make sure no other program is using it.");
-                        cleanupWebcamSearchState();
-                    }
-                } catch (err) {
-                    console.error("Error activating webcam:", err);
-                    showGlobalAlert("An error occurred while activating the webcam.");
-                    cleanupWebcamSearchState();
-                } finally {
-                    searchWebcamActivating = false;
-                    setSearchUILocked(false);
-                }
+                await searchWebcamClient.start();
+                setSearchUILocked(false);
             }
 
             async function stopWebcamSearch() {
                 if (!searchWebcamActive) return;
-
-                if (searchWebcamIntervalId) {
-                    clearInterval(searchWebcamIntervalId);
-                    searchWebcamIntervalId = null;
-                }
+                searchWebcamClient.stop();
                 if (searchSessionTimerId) {
                     clearInterval(searchSessionTimerId);
                     searchSessionTimerId = null;
                 }
-
-                searchWebcamActive = false;
-
-                if (searchWebcamFeed) {
-                    searchWebcamFeed.classList.add('hidden');
-                    searchWebcamFeed.src = '';
-                }
-                if (searchWebcamStandby) searchWebcamStandby.classList.remove('hidden');
-
-                setExecuteButtonState('idle');
                 updateSearchStatus('Completed');
-
-                await fetch('/stop_webcam');
                 generateFindingsReport();
             }
 
             function cleanupWebcamSearchState() {
-                searchWebcamActive = false;
-                if (searchWebcamIntervalId) {
-                    clearInterval(searchWebcamIntervalId);
-                    searchWebcamIntervalId = null;
-                }
+                searchWebcamClient.stop();
                 if (searchSessionTimerId) {
                     clearInterval(searchSessionTimerId);
                     searchSessionTimerId = null;
                 }
-                if (searchWebcamFeed) {
-                    searchWebcamFeed.classList.add('hidden');
-                    searchWebcamFeed.src = '';
-                }
-                if (searchWebcamStandby) searchWebcamStandby.classList.remove('hidden');
-                setExecuteButtonState('idle');
                 updateSearchStatus('Ready to Search');
             }
 
@@ -2516,7 +2482,8 @@
                 // Filter matches by current search query tags and confidence slider value
                 const matched = (objects || []).filter(obj => {
                     const nameLower = obj.name.toLowerCase();
-                    return obj.confidence >= sliderVal && searchTags.includes(nameLower);
+                    const conf = obj.max_confidence !== undefined ? obj.max_confidence : obj.confidence;
+                    return conf >= sliderVal && searchTags.includes(nameLower);
                 });
 
                 let currentMaxConf = 0;
@@ -2524,19 +2491,22 @@
 
                 matched.forEach(obj => {
                     const name = obj.name.toLowerCase();
-                    frameClassCounts[name] = (frameClassCounts[name] || 0) + 1;
+                    const conf = obj.max_confidence !== undefined ? obj.max_confidence : obj.confidence;
+                    const count = obj.count !== undefined ? obj.count : 1;
                     
-                    if (obj.confidence > currentMaxConf) {
-                        currentMaxConf = obj.confidence;
+                    frameClassCounts[name] = (frameClassCounts[name] || 0) + count;
+                    
+                    if (conf > currentMaxConf) {
+                        currentMaxConf = conf;
                     }
-                    if (obj.confidence > searchSessionMaxConfidence) {
-                        searchSessionMaxConfidence = obj.confidence;
+                    if (conf > searchSessionMaxConfidence) {
+                        searchSessionMaxConfidence = conf;
                     }
 
                     if (!searchSessionOccurrences[name]) {
                         searchSessionOccurrences[name] = { peakCount: 0, maxConfidence: 0 };
                     }
-                    searchSessionOccurrences[name].maxConfidence = Math.max(searchSessionOccurrences[name].maxConfidence, obj.confidence);
+                    searchSessionOccurrences[name].maxConfidence = Math.max(searchSessionOccurrences[name].maxConfidence, conf);
                 });
 
                 // Update peak count
@@ -2561,8 +2531,15 @@
                 }
 
                 if (matched.length > 0) {
-                    const topObj = matched.reduce((prev, current) => (prev.confidence > current.confidence) ? prev : current);
-                    searchSessionLatestDetection = `${topObj.name.charAt(0).toUpperCase() + topObj.name.slice(1)} (${Math.round(topObj.confidence * 100)}%)`;
+                    const topObj = matched.reduce((prev, current) => {
+                        const prevConf = prev.max_confidence !== undefined ? prev.max_confidence : prev.confidence;
+                        const currConf = current.max_confidence !== undefined ? current.max_confidence : current.confidence;
+                        return (prevConf > currConf) ? prev : current;
+                    });
+                    const topConf = topObj.max_confidence !== undefined ? topObj.max_confidence : topObj.confidence;
+                    const topCount = topObj.count !== undefined ? topObj.count : 1;
+                    const countStr = topCount > 1 ? ` (x${topCount})` : '';
+                    searchSessionLatestDetection = `${topObj.name.charAt(0).toUpperCase() + topObj.name.slice(1)}${countStr} (${Math.round(topConf * 100)}%)`;
                     if (telemetryLatestVal) {
                         telemetryLatestVal.textContent = searchSessionLatestDetection;
                     }

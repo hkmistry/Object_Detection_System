@@ -2,39 +2,85 @@ from flask import Flask, render_template, Response, jsonify, request, send_from_
 from Detection.webcam import start_webcam, stop_webcam, generate_frames, latest_results
 from Detection.image import detect_image
 from Detection.video import video_bp
+from Services.rate_limiter import RateLimiter
+from Utils.helpers import clean_base64_image
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='Static')
+# Restrict request body size to 1MB to prevent memory exhaustion attacks
+app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024
+
+limiter = RateLimiter(limit=5, window=1.0)
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-#web-cam route
+# Stateless Webcam Process Route
+@app.route('/process_webcam_frame', methods=['POST'])
+def process_webcam_frame_route():
+    # 1. Enforce IP-based rate limits
+    ip_addr = request.remote_addr or "0.0.0.0"
+    if not limiter.is_allowed(ip_addr):
+        return jsonify({"success": False, "error": "Too many frame requests. Rate limit exceeded (Max 5 frames/sec)"}), 429
+
+    # 2. Parse payload JSON
+    data = request.get_json()
+    if not data or 'image' not in data:
+        return jsonify({"success": False, "error": "No image data provided"}), 400
+
+    base64_img = clean_base64_image(data['image'])
+    if not base64_img:
+        return jsonify({"success": False, "error": "Malformed Base64 payload or unsupported image type"}), 400
+
+    query = data.get('query', '')
+    threshold_val = data.get('threshold', 0.25)
+    try:
+        threshold = float(threshold_val)
+    except (ValueError, TypeError):
+        threshold = 0.25
+
+    # 3. Decode base64 and process frame
+    try:
+        import base64
+        img_bytes = base64.b64decode(base64_img)
+        
+        from Detection.webcam import process_webcam_frame_bytes
+        annotated_bytes, objects, meta = process_webcam_frame_bytes(img_bytes, query, threshold)
+        
+        if annotated_bytes is None:
+            return jsonify({"success": False, "error": "Failed to decode/process frame"}), 422
+            
+        encoded_img = base64.b64encode(annotated_bytes).decode('utf-8')
+        img_url = f"data:image/jpeg;base64,{encoded_img}"
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "image": img_url,
+                "objects": objects
+            },
+            "meta": meta
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+# Legacy web-cam routes (Deprecated/Mocked)
 @app.route('/start_webcam')
 def start_webcam_route():
-    query = request.args.get('query', '')
-    threshold_val = request.args.get('threshold', None)
-    threshold = float(threshold_val) if threshold_val is not None else None
-    success = start_webcam(query=query, threshold=threshold)
-    return jsonify({"success": success})
-
+    return jsonify({"success": True, "deprecated": True})
 
 @app.route('/stop_webcam')
 def stop_webcam_route():
-    stop_webcam()
-    return jsonify({"success": True})
-
+    return jsonify({"success": True, "deprecated": True})
 
 @app.route('/video_feed')
 def video_feed():
-    return Response(generate_frames(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
-
+    return "Webcam stream now processes client-side. Please refresh page.", 410
 
 @app.route('/webcam_data')
 def webcam_data():
-    objects = latest_results()
-    return jsonify(objects)
+    return jsonify([])
+
 
 @app.route('/update_search_threshold')
 def update_search_threshold():
