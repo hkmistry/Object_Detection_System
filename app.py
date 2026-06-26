@@ -139,6 +139,12 @@ def upload_image():
 #Video Route
 app.register_blueprint(video_bp)
 
+@app.route('/static/js/webcam_client.js')
+def serve_webcam_client():
+    import os
+    folder = 'Static/js' if os.path.exists('Static/js') else 'static/js'
+    return send_from_directory(folder, 'webcam_client.js')
+
 @app.route('/uploads/<path:filename>')
 def serve_uploads(filename):
     return send_from_directory('uploads', filename)
